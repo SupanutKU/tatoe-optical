@@ -1,0 +1,6 @@
+{
+  "name": "TATOE Optical - แว่นตาตาโต",
+  "description": "แอปพลิเคชันร้านแว่นตาออนไลน์ TATOE Optical (แว่นตาตาโต) สั่งซื้อกรอบและตัดเลนส์สายตา ตรวจสอบสถานะการจัดส่ง และจัดการข้อมูลค่าสายตา",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
