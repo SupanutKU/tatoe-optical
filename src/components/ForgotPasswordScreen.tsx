@@ -114,6 +114,9 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
         throw new Error(data.message || 'ส่งรหัส OTP ไม่สำเร็จ');
       }
       setInfoMessage(data.message);
+      if (data.devOtp) {
+        setOtp(data.devOtp);
+      }
       setStep('otp');
       startCooldown();
     } catch (error) {

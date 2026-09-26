@@ -19,8 +19,10 @@ import { PrescriptionModal } from './components/PrescriptionModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { ChatModal } from './components/ChatModal';
 import { AdminProductModal } from './components/AdminProductModal';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { PushNotificationBanner } from './components/PushNotificationBanner';
 import { NotificationsModal } from './components/NotificationsModal';
+import { ClaimScreen } from './components/ClaimScreen';
 
 // แปลงข้อมูลผู้ใช้ที่ backend ส่งกลับมา (คอลัมน์จากตาราง `group`) ให้เป็นรูปแบบ UserProfile
 // ของแอป ฟิลด์ที่ backend ยังไม่มี (ที่อยู่ทั้งหมด, จำนวนออเดอร์ ฯลฯ) จะ fallback ไปใช้ค่า mock เดิม
@@ -137,6 +139,7 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAdminProductModalOpen, setIsAdminProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(INITIAL_CHAT_THREADS);
   const [chatProduct, setChatProduct] = useState<Product | null>(null);
 
@@ -280,7 +283,9 @@ export default function App() {
   };
 
   const handleRemoveCartItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
+    const item = cartItems.find((i) => i.id === id);
+    setCartItems((prev) => prev.filter((i) => i.id !== id));
+    showToast(`ลบ "${item?.product.name || 'สินค้า'}" ออกจากตะกร้าแล้ว`);
   };
 
   const handleToggleSelectCartItem = (id: string) => {
@@ -612,7 +617,14 @@ export default function App() {
     setEditingProduct(null);
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleRequestDeleteProduct = (productId: string) => {
+    const target = products.find((p) => p.id === productId);
+    if (target) {
+      setProductToDelete(target);
+    }
+  };
+
+  const handleConfirmDeleteProduct = (productId: string) => {
     const target = products.find((p) => p.id === productId);
     setProducts((prev) => prev.filter((p) => p.id !== productId));
     setWishlist((prev) => prev.filter((id) => id !== productId));
@@ -623,8 +635,12 @@ export default function App() {
       if (remaining.length > 0) {
         setSelectedProduct(remaining[0]);
       }
+      if (currentScreen === 'detail') {
+        navigateTo('home');
+      }
     }
-    showToast(`ลบสินค้า "${target?.name || ''}" ออกจากระบบแล้ว`);
+    setProductToDelete(null);
+    showToast(`ลบสินค้า "${target?.name || ''}" ออกจากระบบเรียบร้อยแล้ว 🗑️`);
   };
 
   const handleResetProducts = () => {
@@ -659,7 +675,8 @@ export default function App() {
     { id: 'cart', label: 'ตะกร้าสินค้า', icon: 'shopping_bag' },
     { id: 'checkout', label: 'ชำระเงิน', icon: 'payment' },
     { id: 'orders', label: 'ติดตามคำสั่งซื้อ', icon: 'local_shipping' },
-    { id: 'profile', label: 'โปรไฟล์ & ค่าสายตา', icon: 'person' }
+    { id: 'profile', label: 'โปรไฟล์ & ค่าสายตา', icon: 'person' },
+    { id: 'claims', label: 'ระบบใบเคลม', icon: 'verified_user' }
   ];
 
   return (
@@ -691,7 +708,7 @@ export default function App() {
               onSimulateClickShape={handleSimulateClickShape}
               onOpenAddProduct={handleOpenAddProduct}
               onEditProduct={handleOpenEditProduct}
-              onDeleteProduct={handleDeleteProduct}
+              onDeleteProduct={handleRequestDeleteProduct}
               onResetProducts={handleResetProducts}
             />
           )}
@@ -707,7 +724,7 @@ export default function App() {
               onOpenPrescriptionModal={() => setIsPrescriptionOpen(true)}
               onOpenAddProduct={handleOpenAddProduct}
               onEditProduct={handleOpenEditProduct}
-              onDeleteProduct={handleDeleteProduct}
+              onDeleteProduct={handleRequestDeleteProduct}
             />
           )}
 
@@ -722,10 +739,7 @@ export default function App() {
               onAddToCart={handleAddToCart}
               onOpenChat={(p) => handleOpenChat(p || selectedProduct)}
               onEditProduct={handleOpenEditProduct}
-              onDeleteProduct={(id) => {
-                handleDeleteProduct(id);
-                navigateTo('home');
-              }}
+              onDeleteProduct={handleRequestDeleteProduct}
               onAddReview={handleAddReview}
             />
           )}
@@ -778,6 +792,15 @@ export default function App() {
               onSetDefaultAddress={handleSetDefaultAddress}
               onOpenChat={() => handleOpenChat()}
               unreadChatCount={unreadChatCount}
+            />
+          )}
+
+          {currentScreen === 'claims' && (
+            <ClaimScreen
+              user={user}
+              onNavigate={navigateTo}
+              onOpenChat={() => handleOpenChat()}
+              onShowToast={showToast}
             />
           )}
 
@@ -843,6 +866,15 @@ export default function App() {
           }}
           productToEdit={editingProduct}
           onSave={handleSaveProduct}
+          onDelete={handleRequestDeleteProduct}
+        />
+
+        {/* Delete Product Confirmation Modal */}
+        <DeleteConfirmModal
+          isOpen={!!productToDelete}
+          product={productToDelete}
+          onClose={() => setProductToDelete(null)}
+          onConfirm={handleConfirmDeleteProduct}
         />
 
         {/* 3D Virtual Try-On Modal */}

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CartItem, ScreenId } from '../types';
+import { COUPONS, validateCoupon } from '../constants/coupons';
 
 interface CartScreenProps {
   cartItems: CartItem[];
@@ -21,8 +22,8 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   onOpenPrescriptionModal
 }) => {
   const [promoCode, setPromoCode] = useState('STUDENT100');
-  const [promoApplied, setPromoApplied] = useState(true);
   const [promoDiscount, setPromoDiscount] = useState(100);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const allSelected = cartItems.length > 0 && cartItems.every((item) => item.selected);
   const selectedItems = cartItems.filter((item) => item.selected);
@@ -32,17 +33,95 @@ export const CartScreen: React.FC<CartScreenProps> = ({
     0
   );
 
-  const discount = promoApplied && selectedItems.length > 0 ? promoDiscount : 0;
+  // ตรวจสอบสถานะเริ่มต้น: โค้ดส่วนลดจะใช้งานได้ก็ต่อเมื่อราคาสูงกว่าโค้ดส่วนลดเท่านั้น
+  const [promoApplied, setPromoApplied] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tatoe_applied_coupon');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return subtotal > (parsed.discount || 100);
+      }
+    } catch (e) {}
+    // หากยอดสินค้าเริ่มต้นสูงกว่า 100 จะสามารถใช้ได้ หากไม่ถึงจะไม่เปิดใช้งาน
+    return subtotal > 100;
+  });
+
+  // กฎสำคัญ: โค้ดส่วนลด จะลดเฉพาะราคาที่สูงกว่าโค้ดส่วนลด เช่นสินค้าราคา 10 บาท โค้ดส่วนลด 100 จะไม่สามารถใช้ได้
+  const isCouponPriceEligible = selectedItems.length > 0 && subtotal > promoDiscount;
+  const isPromoValid = promoApplied && isCouponPriceEligible;
+  const discount = isPromoValid ? promoDiscount : 0;
   const netTotal = Math.max(0, subtotal - discount);
 
-  const handleApplyPromo = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (promoCode.trim().toUpperCase() === 'STUDENT100' || promoCode.trim().toUpperCase() === 'BIGEYE') {
-      setPromoApplied(true);
-      setPromoDiscount(100);
+  // ซิงค์และตรวจสอบความถูกต้องเมื่อยอดสินค้าเปลี่ยนแปลง
+  useEffect(() => {
+    if (promoApplied) {
+      if (subtotal <= promoDiscount && selectedItems.length > 0) {
+        setPromoError(
+          `โค้ดส่วนลด ${promoCode} (ลด ฿${promoDiscount}) ใช้ไม่ได้ เนื่องจากยอดรวมสินค้า (฿${subtotal.toLocaleString()}) ต่ำกว่าหรือเท่ากับมูลค่าส่วนลด (โค้ดจะลดเฉพาะราคาที่สูงกว่าโค้ดส่วนลดเท่านั้น เช่น สินค้าราคา ฿10 โค้ด ฿100 จะไม่สามารถใช้ได้)`
+        );
+        try {
+          localStorage.removeItem('tatoe_applied_coupon');
+        } catch (e) {}
+      } else if (subtotal > promoDiscount) {
+        setPromoError(null);
+        try {
+          localStorage.setItem(
+            'tatoe_applied_coupon',
+            JSON.stringify({ code: promoCode, discount: promoDiscount })
+          );
+        } catch (e) {}
+      }
     } else {
-      alert('โค้ดส่วนลดไม่ถูกต้อง ลองใช้ "STUDENT100"');
+      try {
+        localStorage.removeItem('tatoe_applied_coupon');
+      } catch (e) {}
     }
+  }, [subtotal, promoDiscount, promoApplied, promoCode, selectedItems.length]);
+
+  const handleApplyPromo = (e?: React.FormEvent, overrideCode?: string) => {
+    if (e) e.preventDefault();
+    setPromoError(null);
+    const codeToApply = (overrideCode || promoCode).trim().toUpperCase();
+
+    if (!codeToApply) {
+      setPromoError('กรุณากรอกโค้ดส่วนลด');
+      return;
+    }
+
+    if (selectedItems.length === 0) {
+      setPromoError('กรุณาเลือกสินค้าในตะกร้าก่อนใช้โค้ดส่วนลด');
+      return;
+    }
+
+    const result = validateCoupon(codeToApply, subtotal);
+    if (!result.valid) {
+      setPromoApplied(false);
+      setPromoError(result.error || 'ไม่สามารถใช้โค้ดส่วนลดนี้ได้');
+      try {
+        localStorage.removeItem('tatoe_applied_coupon');
+      } catch (err) {}
+      return;
+    }
+
+    const coupon = result.coupon!;
+    setPromoCode(coupon.code);
+    setPromoApplied(true);
+    setPromoDiscount(coupon.discountAmount);
+    setPromoError(null);
+    try {
+      localStorage.setItem(
+        'tatoe_applied_coupon',
+        JSON.stringify({ code: coupon.code, discount: coupon.discountAmount })
+      );
+    } catch (err) {}
+  };
+
+  const handleRemovePromo = () => {
+    setPromoApplied(false);
+    setPromoError(null);
+    try {
+      localStorage.removeItem('tatoe_applied_coupon');
+    } catch (err) {}
   };
 
   const handleRemoveSelected = () => {
@@ -237,19 +316,55 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 
       {/* Coupon Code Voucher Input Section */}
       <div className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm mb-space-md">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="material-symbols-outlined text-primary text-[20px]">
-            confirmation_number
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[20px]">
+              confirmation_number
+            </span>
+            <span className="font-bold text-sm text-on-surface">โค้ดส่วนลดและสิทธิพิเศษ</span>
+          </div>
+          <span className="text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
+            ลดเฉพาะยอดที่สูงกว่าโค้ด
           </span>
-          <span className="font-bold text-sm text-on-surface">โค้ดส่วนลดและสิทธิพิเศษ</span>
         </div>
+
+        {/* Explain Rule */}
+        <p className="text-[11px] text-on-surface-variant mb-2.5 leading-relaxed">
+          💡 <span className="font-semibold text-primary">เงื่อนไข:</span> โค้ดส่วนลดจะลดเฉพาะราคาสินค้าที่สูงกว่ามูลค่าโค้ดส่วนลดเท่านั้น (เช่น สินค้าราคา ฿10 จะไม่สามารถใช้โค้ด ฿100 ได้)
+        </p>
+
+        {/* Quick Coupon Chips */}
+        <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {COUPONS.map((c) => {
+            const isSelected = promoCode.toUpperCase() === c.code.toUpperCase();
+            return (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => {
+                  setPromoCode(c.code);
+                  handleApplyPromo(undefined, c.code);
+                }}
+                className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all flex items-center gap-1 active:scale-95 ${
+                  isSelected && promoApplied && isPromoValid
+                    ? 'bg-secondary text-on-secondary border-secondary font-bold'
+                    : 'bg-surface-container-low text-on-surface border-outline-variant/30 hover:border-primary/50'
+                }`}
+              >
+                <span>{c.code}</span>
+                <span className="opacity-80 text-[10px]">({c.discount})</span>
+              </button>
+            );
+          })}
+        </div>
+
         <form onSubmit={handleApplyPromo} className="flex items-center gap-space-sm">
           <div className="relative flex-1">
             <input
               type="text"
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-              placeholder="ใส่โค้ดส่วนลดนักศึกษา"
+              placeholder="ใส่โค้ดส่วนลด เช่น STUDENT100"
               className="w-full h-11 pl-9 pr-3 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline text-xs uppercase tracking-wider focus:outline-none focus:bg-surface-container-high transition-colors"
             />
             <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-[18px]">
@@ -264,20 +379,47 @@ export const CartScreen: React.FC<CartScreenProps> = ({
           </button>
         </form>
 
-        {promoApplied && (
-          <div className="mt-2.5 flex items-center justify-between bg-secondary-fixed/40 px-space-sm py-1.5 rounded-lg text-on-secondary-fixed">
+        {promoError && (
+          <div className="mt-2.5 p-2.5 bg-error/10 border border-error/25 rounded-lg text-error text-[11px] flex items-start gap-1.5 font-medium leading-relaxed">
+            <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+            <span>{promoError}</span>
+          </div>
+        )}
+
+        {promoApplied && isPromoValid && (
+          <div className="mt-2.5 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/25 px-space-sm py-2 rounded-lg text-emerald-800">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="material-symbols-outlined text-[16px] text-secondary">
+              <span className="material-symbols-outlined text-[16px] text-emerald-600 shrink-0">
                 check_circle
               </span>
               <span className="text-[11px] font-semibold truncate">
-                ส่วนลดพิเศษนักศึกษา ลดทันที ฿{promoDiscount}
+                ใช้โค้ด {promoCode} สำเร็จ: ลดทันที ฿{promoDiscount}
               </span>
             </div>
             <button
               type="button"
-              onClick={() => setPromoApplied(false)}
-              className="text-on-secondary-fixed-variant hover:text-error transition-colors p-0.5"
+              onClick={handleRemovePromo}
+              className="text-emerald-700 hover:text-error transition-colors p-0.5 ml-2"
+              title="ยกเลิกโค้ด"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+        )}
+
+        {promoApplied && !isCouponPriceEligible && selectedItems.length > 0 && (
+          <div className="mt-2.5 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-900 text-[11px] flex items-start gap-1.5 leading-relaxed">
+            <span className="material-symbols-outlined text-amber-600 text-[16px] shrink-0 mt-0.5">warning</span>
+            <div className="flex-1">
+              <span className="font-bold">โค้ด {promoCode} (ลด ฿{promoDiscount}) ใช้ไม่ได้</span>
+              <p className="text-[10px] text-amber-800 mt-0.5">
+                ราคาสินค้าต้องสูงกว่ามูลค่าโค้ดส่วนลด (ยอดสั่งซื้อ ฿{subtotal.toLocaleString()} ต่ำกว่าหรือเท่ากับโค้ด ฿{promoDiscount})
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemovePromo}
+              className="text-amber-800 hover:text-error transition-colors p-0.5"
             >
               <span className="material-symbols-outlined text-[16px]">close</span>
             </button>
@@ -302,10 +444,22 @@ export const CartScreen: React.FC<CartScreenProps> = ({
             </span>
             <span className="text-secondary font-medium">฿0</span>
           </div>
-          {promoApplied && (
-            <div className="flex justify-between items-center text-rose-600">
-              <span>ส่วนลดพิเศษ (Discount)</span>
-              <span className="font-semibold">-฿{discount.toLocaleString()}</span>
+          {promoApplied && isPromoValid && (
+            <div className="flex justify-between items-center text-rose-600 font-semibold">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px]">sell</span>
+                ส่วนลด ({promoCode})
+              </span>
+              <span>-฿{discount.toLocaleString()}</span>
+            </div>
+          )}
+          {promoApplied && !isPromoValid && selectedItems.length > 0 && (
+            <div className="flex justify-between items-center text-amber-700 text-[11px]">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">block</span>
+                ส่วนลด ({promoCode})
+              </span>
+              <span className="italic">ใช้ไม่ได้ (ยอดต่ำกว่าส่วนลด)</span>
             </div>
           )}
           <div className="w-full h-px bg-surface-container-high my-space-xs"></div>

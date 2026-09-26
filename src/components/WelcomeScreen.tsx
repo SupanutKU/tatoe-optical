@@ -12,11 +12,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onNavigate }) => {
       {/* Brand Hero Visual */}
       <div className="flex flex-col items-center gap-4 mt-6">
         <div className="relative">
-          <div className="w-28 h-28 rounded-3xl bg-surface-container-low shadow-lg flex items-center justify-center p-3 ring-4 ring-primary/10">
+          <div className="w-28 h-28 rounded-3xl bg-surface-container-low shadow-lg flex items-center justify-center p-2 ring-4 ring-primary/10 overflow-hidden border border-outline-variant/15">
             <img
               src={APP_LOGO}
               alt="TATOE Optical - แว่นตาตาโต"
-              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover rounded-2xl"
             />
           </div>
           <span className="absolute -bottom-2 -right-2 px-2.5 py-0.5 rounded-full bg-secondary text-on-secondary text-[10px] font-bold shadow-sm">

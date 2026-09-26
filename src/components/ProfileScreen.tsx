@@ -3,6 +3,7 @@ import { UserProfile, ScreenId, UserAddress } from '../types';
 import { AddressModal } from './AddressModal';
 import { BranchAppointmentModal } from './BranchAppointmentModal';
 import { CouponModal } from './CouponModal';
+import { MemberBenefitsModal } from './MemberBenefitsModal';
 import { formatAddress } from '../data/mockData';
 
 interface ProfileScreenProps {
@@ -40,6 +41,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [isMemberBenefitsModalOpen, setIsMemberBenefitsModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -92,14 +94,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <p className="text-xs text-on-surface-variant mt-0.5">{user.email}</p>
         <p className="text-xs text-on-surface-variant">{user.phone}</p>
 
-        {/* Member Tier Badge */}
-        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-100 to-amber-200 text-amber-900 text-xs font-bold shadow-xs">
+        {/* Member Tier Badge (Clickable to view Member Benefits) */}
+        <button
+          type="button"
+          onClick={() => setIsMemberBenefitsModalOpen(true)}
+          className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-100 to-amber-200 text-amber-900 text-xs font-bold shadow-xs hover:shadow-sm hover:from-amber-200 hover:to-amber-300 active:scale-95 transition-all group cursor-pointer border border-amber-300/40"
+          title="แตะเพื่อดูสิทธิประโยชน์สมาชิก Big Eye Club"
+        >
           <span className="material-symbols-outlined text-[16px] text-amber-700" style={{ fontVariationSettings: "'FILL' 1" }}>
             workspace_premium
           </span>
           <span>{user.memberTier}</span>
           <span className="text-amber-800/80 font-normal">• {user.points} คะแนน</span>
-        </div>
+          <span className="material-symbols-outlined text-[14px] text-amber-800/70 ml-0.5 group-hover:translate-x-0.5 transition-transform">
+            chevron_right
+          </span>
+        </button>
       </div>
 
       {/* Optical Prescription Bento Card */}
@@ -373,6 +383,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </span>
         </button>
 
+        {/* Member Benefits Perks Menu Item */}
+        <button
+          type="button"
+          onClick={() => setIsMemberBenefitsModalOpen(true)}
+          className="flex items-center justify-between p-3 hover:bg-surface-container-low transition-colors rounded-xl text-on-surface active:scale-98"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                workspace_premium
+              </span>
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="font-medium">สิทธิประโยชน์สมาชิก (Member Benefits)</span>
+              <span className="text-[10px] text-amber-800/80">
+                สิทธิ์ระดับ Gold • ส่งฟรีไม่มีขั้นต่ำ & ส่วนลดพิเศษ
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-primary text-xs font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-[10px] text-amber-800">
+              ดูสิทธิพิเศษ
+            </span>
+            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+              chevron_right
+            </span>
+          </div>
+        </button>
+
         <button
           type="button"
           onClick={() => setIsCouponModalOpen(true)}
@@ -403,6 +442,29 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
             chevron_right
           </span>
+        </button>
+
+        {/* Claim System Button */}
+        <button
+          type="button"
+          onClick={() => onNavigate('claims')}
+          className="flex items-center justify-between p-3 hover:bg-surface-container-low transition-colors rounded-xl text-on-surface active:scale-98"
+        >
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-primary text-[20px]">
+              verified_user
+            </span>
+            <div className="flex flex-col text-left">
+              <span className="font-medium">ใบเคลมสินค้า & ตรวจสอบสถานะ (Claim System)</span>
+              <span className="text-[10px] text-on-surface-variant">ยื่นคำร้องเคลม และติดตาม 5 ขั้นตอนเรียลไทม์</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-primary font-bold text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-[10px]">ประกัน 1 ปี</span>
+            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+              chevron_right
+            </span>
+          </div>
         </button>
       </div>
 
@@ -508,6 +570,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       <CouponModal
         isOpen={isCouponModalOpen}
         onClose={() => setIsCouponModalOpen(false)}
+        onNavigate={(screen) => onNavigate(screen as ScreenId)}
+      />
+
+      {/* Member Benefits Modal */}
+      <MemberBenefitsModal
+        isOpen={isMemberBenefitsModalOpen}
+        onClose={() => setIsMemberBenefitsModalOpen(false)}
+        user={user}
         onNavigate={(screen) => onNavigate(screen as ScreenId)}
       />
     </div>

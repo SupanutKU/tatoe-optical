@@ -1,54 +1,11 @@
 import React, { useState } from 'react';
+import { COUPONS } from '../constants/coupons';
 
 interface CouponModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate?: (screen: 'search' | 'checkout' | 'home') => void;
 }
-
-interface Coupon {
-  code: string;
-  title: string;
-  discount: string;
-  description: string;
-  minSpend: string;
-  expires: string;
-  tag: string;
-  color: string;
-}
-
-const COUPONS: Coupon[] = [
-  {
-    code: 'STUDENT100',
-    title: 'ส่วนลดพิเศษสำหรับนักเรียน/นักศึกษา',
-    discount: 'ลด ฿100',
-    description: 'ใช้ได้กับกรอบแว่นตาทุกรุ่น และเลนส์สายตาทุกประเภท เพียงแสดงบัตรนักศึกษาหรือใช้โค้ด',
-    minSpend: 'ขั้นต่ำ ฿800',
-    expires: 'หมดอายุ 31 ก.ค. 2025',
-    tag: 'คูปองแนะนำ',
-    color: 'from-amber-500 to-orange-600'
-  },
-  {
-    code: 'EYELOVE50',
-    title: 'ส่วนลดสมาชิก Big Eye Club',
-    discount: 'ลด ฿50',
-    description: 'รับส่วนลดทันทีไม่มีขั้นต่ำ สำหรับการสั่งซื้อทุกประเภท',
-    minSpend: 'ไม่มีขั้นต่ำ',
-    expires: 'หมดอายุ 30 มิ.ย. 2025',
-    tag: 'ใช้ได้เลย',
-    color: 'from-emerald-500 to-teal-600'
-  },
-  {
-    code: 'BIGEYEFREE',
-    title: 'ฟรีค่าจัดส่งด่วนพิเศษ EMS ทั่วประเทศ',
-    discount: 'ฟรีค่าส่ง ฿60',
-    description: 'จัดส่งด่วนพร้อมกล่องพัสดุกันกระแทกและประกันสินค้าเสียหาย 100%',
-    minSpend: 'ขั้นต่ำ ฿500',
-    expires: 'หมดอายุ 31 ธ.ค. 2025',
-    tag: 'จัดส่งฟรี',
-    color: 'from-blue-500 to-indigo-600'
-  }
-];
 
 export const CouponModal: React.FC<CouponModalProps> = ({
   isOpen,
@@ -91,6 +48,17 @@ export const CouponModal: React.FC<CouponModalProps> = ({
           </button>
         </div>
 
+        {/* Terms notice */}
+        <div className="mx-4 mt-3 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2 text-xs text-amber-900">
+          <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">info</span>
+          <div className="leading-snug">
+            <span className="font-bold">เงื่อนไขการใช้โค้ดส่วนลด:</span>
+            <p className="text-[11px] text-amber-800 mt-0.5">
+              โค้ดส่วนลดจะลดเฉพาะคำสั่งซื้อที่มียอดสินค้าสูงกว่ามูลค่าโค้ดเท่านั้น เช่น สินค้าราคา ฿10 โค้ดส่วนลด ฿100 จะไม่สามารถใช้ได้
+            </p>
+          </div>
+        </div>
+
         {/* Coupons List */}
         <div className="p-4 overflow-y-auto space-y-3 no-scrollbar">
           {COUPONS.map((coupon) => {
@@ -117,7 +85,7 @@ export const CouponModal: React.FC<CouponModalProps> = ({
                   </div>
                   <div className="text-right shrink-0">
                     <span className="font-bold text-sm text-primary block">{coupon.discount}</span>
-                    <span className="text-[10px] text-outline">{coupon.minSpend}</span>
+                    <span className="text-[10px] text-outline">{coupon.minSpendText}</span>
                   </div>
                 </div>
 

@@ -75,3 +75,12 @@ npm run dev
 (avatar_url, member_tier, member_points, shipping_address, prescription_*) สำหรับผู้ใช้แต่ละคน
 โดยไม่แตะคอลัมน์ฝั่งสินค้า/ตะกร้า/ออเดอร์ในตารางเดียวกัน — หากจะขยายระบบต่อ (เช่นเชื่อมตะกร้า/ออเดอร์จริง)
 แนะนำให้แยกเป็นตาราง `orders`, `cart_items` ต่างหากในอนาคตเพื่อไม่ให้ข้อมูลซ้ำซ้อน
+
+## 3D Virtual Try-On update
+
+The Virtual Try-On screen now uses a transparent real-time 3D rendering layer on top of the live camera. MediaPipe continues to provide face landmarks, while the 3D glasses renderer follows eye position, face scale, head yaw and roll.
+
+- Live camera uses a parametric 3D glasses frame, so it works without a local GLB asset.
+- Each product can optionally define `model3d` and per-model fit values in the `Product` type for future GLB/GLTF integration.
+- The 3D renderer is loaded from the official Babylon.js CDN at runtime.
+- Upload/captured-photo mode keeps the existing 2D image overlay path.

@@ -1,6 +1,6 @@
 import { Product, UserProfile, CartItem, UserAddress, ChatThread } from '../types';
 
-export const APP_LOGO = 'https://lh3.googleusercontent.com/aida/AEtjO1X2mbPwfWNZCVfunqMltjCc0cF7AB_mZ8_NmmmMH1AnsCOHZ_MSzpFPnP6eSgNPmJkA9nDRbWZRdMTjQ2Mf6e9v_JNBrRAW_3XtnkUL-uTbFdAXeEHuIwKSWcXK5YBzfu7-iifGMzlpWAK4cB0Fy56rcQmXsgX2UEH9nVq7pivVdlMx37_itXxLa-pF-nQbMM4SbYpLvJscVvvuG6lne_xXo8rmVPiCE82Skros3NYHzUYNXgRR0YfgFg';
+export const APP_LOGO = '/src/assets/images/tatoe_optical_logo_1790317254986.jpg';
 
 export const USER_AVATAR = 'https://lh3.googleusercontent.com/aida-public/AB6AXuAgfK7Go8t0q72RUgLa-XWGo7RtV9xjm3yg-D8dL6fuTyT4Rd8J-h-kpxXjlBONOGKFQXn9HM0Y9VZlUq61KYc15SQB1Om184Pn7dao0hpFA_xLTGGNCQ_ErMbQa9qo0f_n1nz_ACUdBRYGNfBzNbt-_xP4P24_h1X_laWzkmmYjr7i50uxSZQ9k-2jRPdCeSdmGpkgq9FyP2jVpogjkX3U67v2UXa0_MrYt30iaOGkk3G9kRQwmzfg';
 
@@ -217,6 +217,32 @@ export const PRODUCTS: Product[] = [
     warranty: '1 ปีเต็ม',
     size: '53-18-142 mm',
     description: 'แว่นสปอร์ตน้ำหนักเบาพิเศษ ยืดหยุ่นสูง ทนทานต่อการตกกระแทก เหมาะสำหรับฟิตเนสและกิจกรรมกลางแจ้ง'
+  },
+  {
+    id: 'cloth-nano-10',
+    name: 'ผ้าเช็ดเลนส์ไมโครไฟเบอร์ Nano Clean (฿10)',
+    subtitle: '(อุปกรณ์ดูแลแว่นตา)',
+    colorName: 'สีเทาพรีเมียม Soft Grey',
+    category: 'blue-light',
+    shape: 'square',
+    material: 'tr90',
+    price: 10,
+    originalPrice: 50,
+    discountPercentage: 80,
+    rating: 5.0,
+    reviewCount: 380,
+    salesCount: '1,200+ ชิ้น',
+    tag: '฿10 ทดสอบโค้ด',
+    badge: 'New',
+    stockStatus: 'in_stock',
+    images: [
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuAZMBqH7_MCWY1cBhlruy859V0cxY-NxSQUxCG4zmhZafutZ28DzT077CdnA1wp1WD-ExOa29UHOjFnOqLZlTEO_p-5SkNIfoNo4It2cze4a4yE5RQnz6XMQfglI8V1VIANCK_-GY6cHv7hmrt_7v1DMt767zG2xO0OUXG4F8S4YnoTiTXv_BYkka0zl0dDFZLzvhxA6nORP00LLfFvlhWKTbNa8kGEpaq0Jv8VrgyCp8iOzL1suXWc'
+    ],
+    lensType: 'ผ้าเช็ดไมโครไฟเบอร์สำหรับเลนส์แว่นตา',
+    weight: '5g',
+    warranty: 'ของแท้ TATOE Optical',
+    size: '15 x 15 cm',
+    description: 'ผ้าเช็ดทำความสะอาดเลนส์ไมโครไฟเบอร์ นุ่มพิเศษ ไม่ทำให้ผิวเคลือบเลนส์เป็นรอย ราคาเพียง ฿10 (สำหรับทดสอบเงื่อนไข: สินค้าราคา ฿10 โค้ดส่วนลด ฿100 จะไม่สามารถใช้ได้)'
   }
 ];
 

@@ -1,7 +1,6 @@
-// ที่อยู่ของ backend server (ดู backend/server.js, PORT default = 3113)
-// ตั้งค่าไฟล์ .env ที่ root โปรเจกต์: VITE_API_URL=http://localhost:3113
+// ที่อยู่ของ backend server (รองรับทั้ง unified dev server ในพอร์ต 3000 เดียวกัน และ external backend)
 export const getApiBaseUrl = (): string => {
-  return (import.meta as any).env?.VITE_API_URL || 'http://localhost:3113';
+  return (import.meta as any).env?.VITE_API_URL || '';
 };
 
 export const API_LOGIN_URL = `${getApiBaseUrl()}/api/login`;

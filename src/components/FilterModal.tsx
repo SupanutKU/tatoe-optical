@@ -45,7 +45,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 
   const handleReset = () => {
     setLocalMin(500);
-    setLocalMax(2500);
+    setLocalMax(3000);
     setLocalMaterial('all');
     onReset();
   };
@@ -68,27 +68,62 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 
         {/* Price Range */}
         <div className="flex flex-col gap-space-sm">
-          <span className="font-semibold text-label-lg text-on-surface">ช่วงราคา</span>
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-label-lg text-on-surface">ช่วงราคา</span>
+            <span className="text-xs font-bold text-primary">
+              ฿{localMin.toLocaleString()} – ฿{localMax.toLocaleString()}
+            </span>
+          </div>
           <div className="flex items-center gap-space-sm">
             <div className="flex-1 bg-surface-container rounded-xl p-2.5 flex flex-col">
-              <span className="text-[11px] text-on-surface-variant">ต่ำสุด</span>
+              <span className="text-[11px] text-on-surface-variant">ต่ำสุด (Min)</span>
               <span className="font-bold text-title-md text-on-surface">฿{localMin.toLocaleString()}</span>
             </div>
             <span className="text-outline font-bold">-</span>
             <div className="flex-1 bg-surface-container rounded-xl p-2.5 flex flex-col">
-              <span className="text-[11px] text-on-surface-variant">สูงสุด</span>
+              <span className="text-[11px] text-on-surface-variant">สูงสุด (Max)</span>
               <span className="font-bold text-title-md text-on-surface">฿{localMax.toLocaleString()}</span>
             </div>
           </div>
-          <input
-            type="range"
-            min="500"
-            max="2500"
-            step="100"
-            value={localMax}
-            onChange={(e) => setLocalMax(Number(e.target.value))}
-            className="w-full accent-primary"
-          />
+
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-[11px] text-on-surface-variant">
+                <span>สไลเดอร์ราคาต่ำสุด:</span>
+                <span className="font-bold text-on-surface">฿{localMin.toLocaleString()}</span>
+              </div>
+              <input
+                type="range"
+                min="500"
+                max="3000"
+                step="50"
+                value={localMin}
+                onChange={(e) => {
+                  const val = Math.min(Number(e.target.value), localMax - 50);
+                  setLocalMin(val);
+                }}
+                className="w-full accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-[11px] text-on-surface-variant">
+                <span>สไลเดอร์ราคาสูงสุด:</span>
+                <span className="font-bold text-on-surface">฿{localMax.toLocaleString()}</span>
+              </div>
+              <input
+                type="range"
+                min="500"
+                max="3000"
+                step="50"
+                value={localMax}
+                onChange={(e) => {
+                  const val = Math.max(Number(e.target.value), localMin + 50);
+                  setLocalMax(val);
+                }}
+                className="w-full accent-primary"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Frame Material */}

@@ -30,7 +30,7 @@ function toCameraError(err: unknown): CameraError {
 }
 
 export interface UseCameraResult {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   isActive: boolean;
   isStarting: boolean;
   error: CameraError | null;

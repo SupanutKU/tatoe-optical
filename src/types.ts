@@ -6,6 +6,7 @@ export type ScreenId =
   | 'checkout'
   | 'orders'
   | 'profile'
+  | 'claims'
   | 'welcome'
   | 'login'
   | 'register'
@@ -33,6 +34,13 @@ export interface Product {
   /** Optional transparent-background cutout used for AR overlay in Virtual Try-On.
    *  Falls back to images[0] when not provided. */
   overlayImage?: string;
+  /** Optional real 3D GLB/GLTF model used by the 3D try-on renderer. */
+  model3d?: string;
+  /** Per-model fit calibration for the 3D try-on renderer. */
+  tryOnScale?: number;
+  tryOnOffsetX?: number;
+  tryOnOffsetY?: number;
+  tryOnOffsetZ?: number;
   lensType: string;
   weight: string;
   warranty: string;
@@ -183,3 +191,63 @@ export interface AppNotification {
   stage?: DeliveryStage;
   read: boolean;
 }
+
+// ==========================================
+// Claim System (ระบบใบเคลมสินค้า)
+// ==========================================
+export type ClaimStepId =
+  | 'submitted'      // 1. ยื่นคำร้องเคลมสำเร็จ (Claim Submitted)
+  | 'received'       // 2. ร้านค้า/ศูนย์บริการรับเรื่อง (Claim Received)
+  | 'inspecting'     // 3. อยู่ระหว่างการตรวจสอบ/ซ่อมแซม (Under Inspection/Repair)
+  | 'dispatched'     // 4. ดำเนินการเสร็จสิ้น/จัดส่งไปยังสาขา (Completed/Dispatched)
+  | 'delivered';     // 5. ลูกค้ารับสินค้าเรียบร้อย (Delivered)
+
+export type ClaimStepState = 'completed' | 'in_progress' | 'pending';
+
+export interface ClaimStepInfo {
+  id: ClaimStepId;
+  stepNumber: number;
+  title: string;
+  englishTitle: string;
+  description: string;
+  timestamp?: string;
+  location?: string;
+  state: ClaimStepState;
+}
+
+export interface ClaimAttachedFile {
+  id: string;
+  name: string;
+  size: string;
+  type: string;
+  url?: string;
+}
+
+export interface ClaimComparisonPhoto {
+  id: string;
+  partName: string;
+  beforeUrl: string;
+  afterUrl: string;
+  beforeDescription: string;
+  afterDescription: string;
+  technicianNote?: string;
+  completedAt?: string;
+  inspectorName?: string;
+}
+
+export interface ClaimTicket {
+  claimId: string;
+  customerName: string;
+  phoneNumber: string;
+  branch: string;
+  issueDescription: string;
+  attachedFiles: ClaimAttachedFile[];
+  productName?: string;
+  orderId?: string;
+  submittedAt: string;
+  currentStepId: ClaimStepId;
+  steps: ClaimStepInfo[];
+  estimatedCompletion?: string;
+  repairComparisons?: ClaimComparisonPhoto[];
+}
+

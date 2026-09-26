@@ -1,6 +1,8 @@
 {
-  "name": "TATOE Optical - แว่นตาตาโต",
-  "description": "แอปพลิเคชันร้านแว่นตาออนไลน์ TATOE Optical (แว่นตาตาโต) สั่งซื้อกรอบและตัดเลนส์สายตา ตรวจสอบสถานะการจัดส่ง และจัดการข้อมูลค่าสายตา",
+  "name": "Remix tatoe-optical",
+  "description": "Imported from GitHub: SupanutKU/tatoe-optical",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

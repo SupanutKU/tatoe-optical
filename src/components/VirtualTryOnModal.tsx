@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Product } from '../types';
 import { useVirtualTryOn } from '../hooks/useVirtualTryOn';
 import { useGlasses, overlayImageForProduct } from '../hooks/useGlasses';
@@ -17,6 +17,8 @@ interface VirtualTryOnModalProps {
   onSelectProduct?: (product: Product) => void;
 }
 
+type TryOnTab = 'live' | 'upload' | 'video';
+
 export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
   isOpen,
   onClose,
@@ -26,18 +28,19 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
 }) => {
   const glasses = useGlasses({ products, initialProduct: currentProduct });
   const tryOn = useVirtualTryOn();
-  // Latest metrics from the *live* camera feed (when there's no captured/
-  // uploaded photo yet), so the recommendation button works before capture too.
+  const [tab, setTab] = useState<TryOnTab>('live');
+  const [showHelp, setShowHelp] = useState(false);
   const [liveMetrics, setLiveMetrics] = useState<FaceMetrics | null>(null);
+
   const handleLiveMetricsUpdate = useCallback((metrics: FaceMetrics | null) => setLiveMetrics(metrics), []);
 
-  // Reset the live/frozen state whenever the modal is closed, so reopening
-  // it always starts from a clean "เปิดกล้อง" state.
   useEffect(() => {
     if (!isOpen) {
       tryOn.setMode('camera');
       glasses.clearRecommendation();
       setLiveMetrics(null);
+      setTab('live');
+      setShowHelp(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -47,102 +50,92 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProduct?.id]);
 
-  // Live metrics are only meaningful while the live camera view is actually
-  // mounted (no frozen/captured photo, mode is "camera").
   useEffect(() => {
     if (tryOn.mode !== 'camera' || tryOn.frozenPhoto) setLiveMetrics(null);
   }, [tryOn.mode, tryOn.frozenPhoto]);
 
-  if (!isOpen) return null;
-
   const glassesSrc = overlayImageForProduct(glasses.selected);
   const activeMetrics = tryOn.frozenPhoto?.status === 'ready' ? tryOn.frozenPhoto.metrics : liveMetrics;
   const canAnalyze = !!activeMetrics;
+  const selectedIndex = useMemo(
+    () => Math.max(0, products.findIndex((product) => product.id === glasses.selected.id)),
+    [products, glasses.selected.id]
+  );
+
+  if (!isOpen) return null;
+
+  const changeTab = (next: TryOnTab) => {
+    setTab(next);
+    if (next === 'upload') tryOn.setMode('upload');
+    else tryOn.setMode('camera');
+  };
 
   const handleSelectProduct = (product: Product) => {
     glasses.selectProduct(product);
-    if (onSelectProduct) onSelectProduct(product);
+    onSelectProduct?.(product);
   };
 
   const handleConfirm = () => {
-    if (onSelectProduct) onSelectProduct(glasses.selected);
+    onSelectProduct?.(glasses.selected);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-inverse-surface/70 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-[430px] bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[96dvh] sm:max-h-[92vh]">
-        {/* Modal Header */}
-        <div className="px-5 py-4 flex items-center justify-between border-b border-outline-variant/20 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-[20px]">view_in_ar</span>
-            </div>
-            <div>
-              <h3 className="font-bold text-[16px] text-on-surface">3D Virtual Try-On</h3>
-              <p className="text-[11px] text-on-surface-variant">
-                ลองสวมแว่นเสมือนจริงด้วยระบบ AI Facial Tracking
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-[1180px] h-[min(94dvh,820px)] bg-[#111318] text-white rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+        {/* Top bar */}
+        <div className="h-16 shrink-0 px-4 sm:px-7 flex items-center justify-between border-b border-white/10 bg-[#14161b]">
+          <button
+            onClick={() => setShowHelp((value) => !value)}
+            aria-label="วิธีใช้งาน"
+            className="w-10 h-10 rounded-full border border-white/60 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+          >
+            <span className="text-lg font-semibold">?</span>
+          </button>
+
+          <div className="flex items-center gap-1 p-1 rounded-full bg-white shadow-lg">
+            {([
+              ['live', 'สด'],
+              ['upload', 'อัปโหลด'],
+              ['video', 'วิดีโอ'],
+            ] as [TryOnTab, string][]).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => changeTab(value)}
+                className={`px-5 sm:px-7 h-9 rounded-full text-xs sm:text-sm font-semibold transition-all ${
+                  tab === value ? 'bg-[#071b4b] text-white shadow-sm' : 'text-[#0a1740] hover:bg-black/5'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
+
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container flex items-center justify-center text-on-surface-variant transition-colors active:scale-90"
+            aria-label="ปิด"
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/15 flex items-center justify-center transition-colors"
           >
-            <span className="material-symbols-outlined text-[18px]">close</span>
+            <span className="material-symbols-outlined text-[22px]">close</span>
           </button>
         </div>
 
-        {/* Mode Tabs */}
-        <div className="px-4 pt-3 shrink-0">
-          <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-surface-container-high">
-            <button
-              onClick={() => tryOn.setMode('camera')}
-              className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                tryOn.mode === 'camera'
-                  ? 'bg-surface-container-lowest text-primary shadow-sm'
-                  : 'text-on-surface-variant'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">photo_camera</span>
-              เปิดกล้อง
-            </button>
-            <button
-              onClick={() => tryOn.setMode('upload')}
-              className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                tryOn.mode === 'upload'
-                  ? 'bg-surface-container-lowest text-primary shadow-sm'
-                  : 'text-on-surface-variant'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">image</span>
-              อัปโหลดรูป
-            </button>
+        {/* Help */}
+        {showHelp && (
+          <div className="absolute z-40 top-20 left-5 sm:left-8 max-w-sm rounded-2xl bg-white text-[#151821] p-4 shadow-2xl border border-black/5">
+            <p className="font-bold text-sm">วิธีลองแว่น 3D</p>
+            <ol className="mt-2 text-xs leading-6 text-black/65 list-decimal pl-4">
+              <li>อนุญาตการใช้กล้อง</li>
+              <li>หันหน้าเข้ากล้องให้เห็นตาและจมูกชัดเจน</li>
+              <li>เลือกกรอบด้านล่าง ระบบจะเปลี่ยนโมเดล 3D ทันที</li>
+              <li>ลองหันซ้าย–ขวา ระบบจะหมุนกรอบตามศีรษะ</li>
+            </ol>
           </div>
-        </div>
+        )}
 
-        {/* Preview */}
-        <div className="relative w-full flex-1 min-h-[320px] sm:aspect-[4/5] sm:flex-none bg-black mt-3 overflow-hidden">
-          {tryOn.mode === 'camera' ? (
-            tryOn.frozenPhoto ? (
-              <FrozenPhotoView
-                photo={tryOn.frozenPhoto}
-                glassesSrc={glassesSrc}
-                retakeLabel="ถ่ายใหม่"
-                onRetake={() => {
-                  glasses.clearRecommendation();
-                  tryOn.retake();
-                }}
-              />
-            ) : (
-              <CameraView
-                active={isOpen && tryOn.mode === 'camera'}
-                glassesSrc={glassesSrc}
-                onCapture={(video, metrics, mirrored) => tryOn.captureFromVideo(video, metrics, mirrored)}
-                onMetricsUpdate={handleLiveMetricsUpdate}
-              />
-            )
-          ) : (
+        {/* Main preview */}
+        <div className="relative flex-1 min-h-0 bg-[#050608] overflow-hidden">
+          {tab === 'upload' ? (
             <UploadView
               photo={tryOn.frozenPhoto}
               isProcessing={tryOn.isProcessingUpload}
@@ -153,52 +146,87 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
                 tryOn.retake();
               }}
             />
+          ) : tryOn.frozenPhoto ? (
+            <FrozenPhotoView
+              photo={tryOn.frozenPhoto}
+              glassesSrc={glassesSrc}
+              retakeLabel="ถ่ายใหม่"
+              onRetake={() => {
+                glasses.clearRecommendation();
+                tryOn.retake();
+              }}
+            />
+          ) : (
+            <CameraView
+              active={isOpen && tryOn.mode === 'camera'}
+              product={glasses.selected}
+              onCapture={(video, metrics, mirrored) => tryOn.captureFromVideo(video, metrics, mirrored)}
+              onMetricsUpdate={handleLiveMetricsUpdate}
+            />
           )}
 
-          {/* Floating Selected Glass Badge */}
-          <div className="absolute bottom-16 left-3 right-3 bg-surface-container-lowest/95 backdrop-blur-md p-3 rounded-2xl shadow-lg flex items-center gap-2.5 z-10">
-            <div className="w-10 h-10 rounded-lg bg-surface-container-low p-1 flex items-center justify-center shrink-0">
-              <img
-                src={glasses.selected.images[0]}
-                alt={glasses.selected.name}
-                className="w-full h-full object-contain"
-              />
+          {tab === 'video' && !tryOn.frozenPhoto && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-black/45 border border-white/10 backdrop-blur-md text-[11px] text-white/90">
+              โหมดวิดีโอ • ขยับศีรษะเพื่อดูมิติของกรอบ
             </div>
-            <div className="min-w-0">
-              <p className="font-bold text-[13px] text-on-surface truncate">{glasses.selected.name}</p>
-              <p className="text-[11px] text-primary font-semibold">
-                ฿{glasses.selected.price.toLocaleString()} • {glasses.selected.colorName}
-              </p>
+          )}
+
+          {/* Product info bar */}
+          <div className="absolute left-0 right-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/55 to-transparent pt-14 px-5 sm:px-7 pb-5 pointer-events-none">
+            <div className="flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm sm:text-base font-medium text-white/90 truncate">{glasses.selected.subtitle || glasses.selected.category}</p>
+                <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight truncate">{glasses.selected.name}</h2>
+                <p className="mt-1 text-sm font-semibold text-white/85">฿{glasses.selected.price.toLocaleString()} <span className="font-normal text-white/55">• {glasses.selected.colorName}</span></p>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 text-[11px] text-white/70 shrink-0">
+                <span className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md">3D Preview</span>
+                <span className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md">{selectedIndex + 1}/{products.length}</span>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Controls */}
-        <div className="p-4 bg-surface-container-lowest flex flex-col gap-3 overflow-y-auto">
-          <GlassesRecommendation
-            canAnalyze={canAnalyze}
-            faceShapeResult={glasses.faceShapeResult}
-            recommendations={glasses.recommendations}
-            onAnalyze={() => {
-              if (activeMetrics) glasses.analyzeFaceShape(activeMetrics);
-            }}
-            onDismiss={glasses.clearRecommendation}
-            onPickProduct={handleSelectProduct}
-          />
-
-          <GlassesSelector
-            products={glasses.glasses}
-            selectedId={glasses.selected.id}
-            onSelect={handleSelectProduct}
-          />
 
           <button
-            onClick={handleConfirm}
-            className="w-full h-11 mt-1 rounded-xl bg-primary text-on-primary font-bold text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 transition-all shrink-0"
+            onClick={() => changeTab('live')}
+            className="absolute right-5 bottom-20 z-30 w-12 h-12 rounded-full bg-white/15 border border-white/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/25 transition-all"
+            aria-label="เปิดกล้อง"
           >
-            <span>เลือกกรอบแว่นรุ่นนี้ ({glasses.selected.name})</span>
-            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            <span className="material-symbols-outlined text-[22px]">photo_camera</span>
           </button>
+        </div>
+
+        {/* Bottom product rail */}
+        <div className="shrink-0 bg-[#f8f8fa] text-[#16181d] px-4 sm:px-7 pt-3 pb-4 sm:pb-5">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <p className="text-[11px] text-black/45">กรอบที่เลือก</p>
+              <p className="text-sm font-bold truncate max-w-[260px]">{glasses.selected.name}</p>
+            </div>
+            <button
+              onClick={handleConfirm}
+              className="shrink-0 px-4 sm:px-5 h-9 rounded-full bg-[#071b4b] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+            >
+              ใช้กรอบนี้
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </div>
+
+          <div className="rounded-2xl bg-white border border-black/5 px-2 py-2 shadow-sm">
+            <GlassesSelector products={glasses.glasses} selectedId={glasses.selected.id} onSelect={handleSelectProduct} />
+          </div>
+
+          <div className="mt-2">
+            <GlassesRecommendation
+              canAnalyze={canAnalyze}
+              faceShapeResult={glasses.faceShapeResult}
+              recommendations={glasses.recommendations}
+              onAnalyze={() => {
+                if (activeMetrics) glasses.analyzeFaceShape(activeMetrics);
+              }}
+              onDismiss={glasses.clearRecommendation}
+              onPickProduct={handleSelectProduct}
+            />
+          </div>
         </div>
       </div>
     </div>

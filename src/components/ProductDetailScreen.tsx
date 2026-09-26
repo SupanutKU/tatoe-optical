@@ -137,9 +137,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (confirm(`คุณต้องการลบสินค้า "${product.name}" หรือไม่?`)) {
-                  onDeleteProduct && onDeleteProduct(product.id);
-                }
+                onDeleteProduct && onDeleteProduct(product.id);
               }}
               className="px-2.5 py-1 bg-error-container hover:bg-red-200 text-on-error-container font-bold text-xs rounded-lg transition-colors flex items-center gap-1"
             >

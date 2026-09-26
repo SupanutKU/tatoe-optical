@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { getVideoFaceLandmarker, isBrowserSupported } from '../lib/faceLandmarkerLoader';
 import { computeFaceMetrics, type FaceMetrics } from '../lib/faceGeometry';
-import { computeGlassesTransform, drawGlasses } from '../lib/virtualTryOnEngine';
-import { loadCachedImage } from '../lib/imageCache';
 
 export type TrackingStatus =
   | 'idle'
@@ -14,59 +12,36 @@ export type TrackingStatus =
   | 'error';
 
 export interface UseFaceTrackingOptions {
-  videoRef: RefObject<HTMLVideoElement>;
-  canvasRef: RefObject<HTMLCanvasElement>;
-  glassesSrc: string | null;
-  /** Run the detection + draw loop. Set false to pause (e.g. modal closed, tab hidden). */
+  videoRef: RefObject<HTMLVideoElement | null>;
+  /** Run the detection loop. */
   enabled: boolean;
 }
 
 export interface UseFaceTrackingResult {
   status: TrackingStatus;
   errorMessage: string | null;
-  /** Throttled snapshot of the latest face metrics, for UI (PD readout, recommendation engine). */
   metrics: FaceMetrics | null;
 }
 
-const STATE_UPDATE_INTERVAL_MS = 150;
+const STATE_UPDATE_INTERVAL_MS = 120;
 
-export function useFaceTracking({
-  videoRef,
-  canvasRef,
-  glassesSrc,
-  enabled,
-}: UseFaceTrackingOptions): UseFaceTrackingResult {
+/** MediaPipe-only tracking. Rendering is intentionally separate from tracking
+ * so the live camera can stay visible while a transparent WebGL/Babylon 3D
+ * layer renders the glasses above it. */
+export function useFaceTracking({ videoRef, enabled }: UseFaceTrackingOptions): UseFaceTrackingResult {
   const [status, setStatus] = useState<TrackingStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<FaceMetrics | null>(null);
-
-  const glassesImageRef = useRef<HTMLImageElement | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const lastStateUpdateRef = useRef(0);
   const lastStatusRef = useRef<TrackingStatus>('idle');
 
-  // Keep the glasses image ready without restarting the detection loop.
-  useEffect(() => {
-    if (!glassesSrc) {
-      glassesImageRef.current = null;
-      return;
-    }
-    let cancelled = false;
-    loadCachedImage(glassesSrc)
-      .then((img) => {
-        if (!cancelled) glassesImageRef.current = img;
-      })
-      .catch(() => {
-        if (!cancelled) glassesImageRef.current = null;
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [glassesSrc]);
-
   useEffect(() => {
     if (!enabled) {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
       setStatus('idle');
+      setMetrics(null);
       return;
     }
 
@@ -78,28 +53,18 @@ export function useFaceTracking({
 
     let cancelled = false;
     setStatus('loading-model');
+    setErrorMessage(null);
 
     getVideoFaceLandmarker()
       .then((landmarker) => {
         if (cancelled) return;
 
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (!video || !canvas) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
         const loop = (timestampMs: number) => {
           if (cancelled) return;
           rafIdRef.current = requestAnimationFrame(loop);
 
-          if (video.readyState < 2 || video.videoWidth === 0) return;
-
-          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-          }
+          const video = videoRef.current;
+          if (!video || video.readyState < 2 || video.videoWidth === 0) return;
 
           let result;
           try {
@@ -108,14 +73,6 @@ export function useFaceTracking({
             return;
           }
 
-          // Draw the live video frame onto the canvas itself first. The
-          // glasses are then composited (multiply blend) against these
-          // pixels — a canvas can only blend against content already drawn
-          // on it, not against the <video> element sitting behind it.
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.globalAlpha = 1;
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
           const faces = result.faceLandmarks ?? [];
           let nextStatus: TrackingStatus = 'no-face';
           let nextMetrics: FaceMetrics | null = null;
@@ -123,19 +80,8 @@ export function useFaceTracking({
           if (faces.length > 1) {
             nextStatus = 'multiple-faces';
           } else if (faces.length === 1) {
-            nextMetrics = computeFaceMetrics(faces[0], canvas.width, canvas.height);
-            if (nextMetrics) {
-              nextStatus = 'tracking';
-              const glassesImg = glassesImageRef.current;
-              if (glassesImg) {
-                const transform = computeGlassesTransform({
-                  metrics: nextMetrics,
-                  glassesNaturalWidth: glassesImg.naturalWidth,
-                  glassesNaturalHeight: glassesImg.naturalHeight,
-                });
-                drawGlasses(ctx, glassesImg, transform);
-              }
-            }
+            nextMetrics = computeFaceMetrics(faces[0], video.videoWidth, video.videoHeight);
+            if (nextMetrics) nextStatus = 'tracking';
           }
 
           const now = timestampMs;
@@ -160,9 +106,7 @@ export function useFaceTracking({
     return () => {
       cancelled = true;
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
-      if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      rafIdRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);

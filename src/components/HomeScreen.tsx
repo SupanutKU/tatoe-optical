@@ -100,10 +100,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onNavigate('home')}
-            className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center p-1.5 shadow-sm active:scale-95 transition-transform"
+            className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center p-1 shadow-sm active:scale-95 transition-transform overflow-hidden border border-outline-variant/15 ring-1 ring-primary/10"
             aria-label="TATOE Optical หน้าหลัก"
           >
-            <img src={APP_LOGO} alt="TATOE Optical" className="w-full h-full object-contain" />
+            <img
+              src={APP_LOGO}
+              alt="TATOE Optical"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover rounded-lg"
+            />
           </button>
         </div>
       </div>
@@ -377,9 +382,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       type="button"
                       title="ลบสินค้า"
                       onClick={() => {
-                        if (confirm(`คุณต้องการลบสินค้า "${item.name}" หรือไม่?`)) {
-                          onDeleteProduct && onDeleteProduct(item.id);
-                        }
+                        onDeleteProduct && onDeleteProduct(item.id);
                       }}
                       className="w-6 h-6 rounded bg-error-container text-on-error-container flex items-center justify-center hover:bg-red-200 active:scale-90 transition-all"
                     >
@@ -546,9 +549,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`คุณต้องการลบสินค้า "${item.name}" หรือไม่?`)) {
-                            onDeleteProduct && onDeleteProduct(item.id);
-                          }
+                          onDeleteProduct && onDeleteProduct(item.id);
                         }}
                         className="px-2 py-1 bg-error-container text-on-error-container text-[11px] font-bold rounded-lg hover:bg-red-200 active:scale-95 transition-all flex items-center gap-0.5"
                       >
@@ -596,6 +597,42 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           เปิดกล้อง
         </button>
+      </div>
+
+      {/* 7. Warranty & Optical Claim System Service Card */}
+      <div className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/15 shadow-sm flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[22px]">verified_user</span>
+            </div>
+            <div className="flex flex-col">
+              <h3 className="font-bold text-sm text-on-surface">ระบบใบเคลมสินค้า (Claim System)</h3>
+              <p className="text-[11px] text-on-surface-variant">
+                บริการหลังการขาย • ดัดทรง • ซ่อมแซม • ติดตาม 5 ขั้นตอน
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-outline-variant/10">
+          <button
+            type="button"
+            onClick={() => onNavigate('claims')}
+            className="h-10 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all border border-outline-variant/20"
+          >
+            <span className="material-symbols-outlined text-primary text-[18px]">edit_document</span>
+            <span>กรอกใบเคลม</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate('claims')}
+            className="h-10 px-3 rounded-xl bg-primary text-on-primary font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-primary-container active:scale-95 transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">track_changes</span>
+            <span>ตรวจสถานะเคลม</span>
+          </button>
+        </div>
       </div>
     </div>
   );

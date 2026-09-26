@@ -5,6 +5,8 @@ interface AIRecommendationSectionProps {
   products: Product[];
   viewedShapes: Record<string, number>;
   wishlist: string[];
+  comparisonProductIds?: string[];
+  onToggleCompare?: (productId: string) => void;
   onToggleWishlist: (productId: string) => void;
   onSelectProduct: (product: Product) => void;
   onAddToCart: (product: Product) => void;

@@ -354,21 +354,29 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Receipt & Chat */}
-        <div className="grid grid-cols-2 gap-2 pt-2">
+        {/* Action Buttons: Receipt, Claim & Chat */}
+        <div className="grid grid-cols-3 gap-1.5 pt-2">
           <button
             onClick={onOpenReceipt}
-            className="h-11 rounded-xl bg-surface-container-high text-on-surface font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all hover:bg-surface-container"
+            className="h-10 rounded-xl bg-surface-container-high text-on-surface font-semibold text-[11px] flex items-center justify-center gap-1 active:scale-95 transition-all hover:bg-surface-container"
           >
-            <span className="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
-            <span>ดูใบเสร็จรับเงิน</span>
+            <span className="material-symbols-outlined text-[16px] text-primary">receipt_long</span>
+            <span>ใบเสร็จ</span>
+          </button>
+          <button
+            onClick={() => onNavigate('claims')}
+            className="h-10 rounded-xl bg-amber-500/10 text-amber-900 border border-amber-500/25 font-bold text-[11px] flex items-center justify-center gap-1 active:scale-95 transition-all hover:bg-amber-500/20"
+            title="ส่งคำร้องเคลมสินค้านี้"
+          >
+            <span className="material-symbols-outlined text-[16px] text-amber-700">verified_user</span>
+            <span>ส่งเคลม</span>
           </button>
           <button
             onClick={onOpenChat}
-            className="h-11 rounded-xl bg-primary text-on-primary font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+            className="h-10 rounded-xl bg-primary text-on-primary font-bold text-[11px] flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
           >
-            <span className="material-symbols-outlined text-[18px]">chat</span>
-            <span>ติดต่อเจ้าหน้าที่</span>
+            <span className="material-symbols-outlined text-[16px]">chat</span>
+            <span>แชท</span>
           </button>
         </div>
       </div>

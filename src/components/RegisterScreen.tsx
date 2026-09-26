@@ -80,8 +80,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
     <div className="flex flex-col items-center justify-center min-h-[80vh] w-full py-6 animate-in fade-in duration-300">
       <div className="w-full max-w-[360px] bg-surface-container-lowest rounded-3xl p-space-lg shadow-sm border border-outline-variant/15 flex flex-col gap-space-md">
         <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-2xl bg-surface-container-low p-2 shadow-sm mb-2.5 flex items-center justify-center">
-            <img src={APP_LOGO} alt="Logo" className="w-full h-full object-contain" />
+          <div className="w-18 h-18 rounded-2xl bg-surface-container-low p-1.5 shadow-sm mb-2.5 flex items-center justify-center border border-outline-variant/20 overflow-hidden ring-2 ring-primary/15">
+            <img
+              src={APP_LOGO}
+              alt="TATOE Optical Logo"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover rounded-xl"
+            />
           </div>
           <h2 className="font-bold text-headline-sm text-on-surface">สมัครสมาชิก</h2>
           <p className="text-xs text-on-surface-variant mt-0.5">TATOE Optical - แว่นตาตาโต</p>

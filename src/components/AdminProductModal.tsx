@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 
 interface AdminProductModalProps {
@@ -6,6 +6,7 @@ interface AdminProductModalProps {
   onClose: () => void;
   productToEdit?: Product | null;
   onSave: (productData: Partial<Product> & { id?: string }) => void;
+  onDelete?: (productId: string) => void;
 }
 
 const PRESET_IMAGES = [
@@ -39,9 +40,11 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   isOpen,
   onClose,
   productToEdit,
-  onSave
+  onSave,
+  onDelete
 }) => {
   const [name, setName] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState('');
   const [colorName, setColorName] = useState('');
   const [price, setPrice] = useState('1290');
@@ -56,7 +59,10 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   const [badge, setBadge] = useState<'Best Seller' | 'New' | ''>('New');
   const [stockStatus, setStockStatus] = useState<'in_stock' | 'low_stock' | 'out_of_stock'>('in_stock');
   const [imageUrl, setImageUrl] = useState(PRESET_IMAGES[0].url);
+  const [imageInputMode, setImageInputMode] = useState<'url' | 'upload' | 'preset'>('url');
+  const [customUrlInput, setCustomUrlInput] = useState('');
   const [description, setDescription] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (productToEdit) {
@@ -74,7 +80,18 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       setTag(productToEdit.tag || '');
       setBadge(productToEdit.badge || '');
       setStockStatus(productToEdit.stockStatus);
-      setImageUrl(productToEdit.images[0] || PRESET_IMAGES[0].url);
+      const initialImg = productToEdit.images[0] || PRESET_IMAGES[0].url;
+      setImageUrl(initialImg);
+      if (initialImg.startsWith('data:')) {
+        setImageInputMode('upload');
+        setCustomUrlInput('');
+      } else if (PRESET_IMAGES.some((p) => p.url === initialImg)) {
+        setImageInputMode('preset');
+        setCustomUrlInput('');
+      } else {
+        setImageInputMode('url');
+        setCustomUrlInput(initialImg);
+      }
       setDescription(productToEdit.description);
     } else {
       setName('');
@@ -92,18 +109,38 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       setBadge('New');
       setStockStatus('in_stock');
       setImageUrl(PRESET_IMAGES[0].url);
+      setImageInputMode('url');
+      setCustomUrlInput('');
       setDescription('กรอบแว่นตาน้ำหนักเบาพิเศษ ผลิตจากวัสดุพรีเมียม ใส่สบายตลอดวัน');
     }
   }, [productToEdit, isOpen]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setFormError('กรุณาเลือกไฟล์รูปภาพเท่านั้น (JPG, PNG, WebP)');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setImageUrl(event.target.result);
+        setFormError(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      alert('กรุณากรอกชื่อสินค้า');
+      setFormError('กรุณากรอกชื่อรุ่นแว่นตา');
       return;
     }
+    setFormError(null);
 
     const numPrice = parseFloat(price) || 990;
     const numOriginal = originalPrice ? parseFloat(originalPrice) : undefined;
@@ -158,6 +195,13 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto flex flex-col gap-4 text-xs">
+          {formError && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-error-container text-on-error-container text-xs font-semibold">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              <span>{formError}</span>
+            </div>
+          )}
+
           {/* Product Name */}
           <div className="flex flex-col gap-1">
             <label className="font-bold text-on-surface text-[11px]">ชื่อรุ่นแว่นตา *</label>
@@ -315,35 +359,180 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
             </div>
           </div>
 
-          {/* Image Presets Picker */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-bold text-on-surface text-[11px]">เลือกภาพตัวอย่างสินค้า</label>
-            <div className="grid grid-cols-3 gap-2">
-              {PRESET_IMAGES.map((preset, idx) => {
-                const isSelected = imageUrl === preset.url;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setImageUrl(preset.url)}
-                    className={`relative p-1.5 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary-fixed/20 ring-2 ring-primary/40'
-                        : 'border-outline-variant/30 bg-surface-container-low hover:border-primary/40'
-                    }`}
-                  >
-                    <img src={preset.url} alt={preset.label} className="w-12 h-10 object-contain" />
-                    <span className="text-[10px] text-on-surface truncate w-full text-center">
-                      {preset.label}
+          {/* Image Input Section: URL, Upload, or Presets */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-on-surface text-[11px] flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px] text-primary">image</span>
+                <span>รูปภาพสินค้า *</span>
+              </label>
+
+              {/* Mode Tabs: URL vs Upload vs Presets */}
+              <div className="inline-flex p-0.5 bg-surface-container-low rounded-lg border border-outline-variant/30 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setImageInputMode('url')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    imageInputMode === 'url'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  🔗 วางลิงก์ URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageInputMode('upload')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    imageInputMode === 'upload'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  📤 อัปโหลดรูป
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageInputMode('preset')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    imageInputMode === 'preset'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  🖼️ ภาพตัวอย่าง
+                </button>
+              </div>
+            </div>
+
+            {/* Mode 1: URL input */}
+            {imageInputMode === 'url' && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[16px]">
+                      link
                     </span>
-                    {isSelected && (
-                      <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-primary text-white flex items-center justify-center text-[10px]">
-                        ✓
+                    <input
+                      type="url"
+                      value={customUrlInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomUrlInput(val);
+                        if (val.trim()) {
+                          setImageUrl(val.trim());
+                        }
+                      }}
+                      placeholder="วางลิงก์รูปภาพ เช่น https://example.com/glasses.jpg"
+                      className="w-full h-9 pl-8 pr-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface focus:border-primary focus:outline-none text-xs"
+                    />
+                  </div>
+                  {customUrlInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomUrlInput('');
+                        setImageUrl(PRESET_IMAGES[0].url);
+                      }}
+                      className="px-2.5 h-9 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant text-[11px] font-medium"
+                      title="ล้างลิงก์"
+                    >
+                      ล้าง
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-on-surface-variant pl-1">
+                  รองรับลิงก์รูปภาพสาธารณะ เช่น จากเว็บไซต์, Google Photos, Cloudinary หรือ CDN
+                </p>
+              </div>
+            )}
+
+            {/* Mode 2: File Upload */}
+            {imageInputMode === 'upload' && (
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp, image/gif"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="admin-product-file-upload"
+                />
+                <label
+                  htmlFor="admin-product-file-upload"
+                  className="w-full border-2 border-dashed border-outline-variant/50 hover:border-primary/60 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 bg-surface-container-low/60 hover:bg-surface-container-low cursor-pointer transition-all active:scale-[0.99]"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[20px]">cloud_upload</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="font-bold text-xs text-primary">คลิกเพื่อเลือกไฟล์รูปภาพจากอุปกรณ์</span>
+                    <p className="text-[10px] text-on-surface-variant mt-0.5">
+                      รองรับ JPG, PNG, WEBP (แปลงและบันทึกอัตโนมัติ)
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Mode 3: Presets */}
+            {imageInputMode === 'preset' && (
+              <div className="grid grid-cols-3 gap-2">
+                {PRESET_IMAGES.map((preset, idx) => {
+                  const isSelected = imageUrl === preset.url;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setImageUrl(preset.url)}
+                      className={`relative p-1.5 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                        isSelected
+                          ? 'border-primary bg-primary-fixed/20 ring-2 ring-primary/40'
+                          : 'border-outline-variant/30 bg-surface-container-low hover:border-primary/40'
+                      }`}
+                    >
+                      <img src={preset.url} alt={preset.label} className="w-12 h-10 object-contain" />
+                      <span className="text-[10px] text-on-surface truncate w-full text-center">
+                        {preset.label}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
+                      {isSelected && (
+                        <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-primary text-white flex items-center justify-center text-[10px]">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Current Image Preview & Status */}
+            <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-container-low border border-outline-variant/20">
+              <div className="w-14 h-14 rounded-lg bg-surface-container-lowest border border-outline-variant/30 overflow-hidden flex items-center justify-center shrink-0">
+                <img
+                  src={imageUrl}
+                  alt="ภาพตัวอย่างสินค้า"
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = PRESET_IMAGES[0].url;
+                  }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-on-surface">พรีวิวรูปสินค้า</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-primary/10 text-primary">
+                    {imageUrl.startsWith('data:')
+                      ? 'ไฟล์อัปโหลด'
+                      : PRESET_IMAGES.some((p) => p.url === imageUrl)
+                      ? 'ภาพสำเร็จรูป'
+                      : 'จาก URL'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-on-surface-variant truncate mt-0.5">
+                  {imageUrl.startsWith('data:') ? 'รูปภาพที่เลือกจากเครื่องของคุณ' : imageUrl}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -360,7 +549,21 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="flex gap-2 pt-2 border-t border-outline-variant/20">
+          <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/20">
+            {productToEdit && onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(productToEdit.id);
+                  onClose();
+                }}
+                className="h-11 px-3.5 rounded-xl bg-error-container text-on-error-container hover:bg-red-200 font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+                title="ลบสินค้านี้ออกจากระบบ"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                <span>ลบสินค้า</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
