@@ -53,10 +53,348 @@ async function ensurePasswordResetsTable() {
   `);
 }
 
+
+// =====================================================
+// Product catalog (SQL source of truth)
+// The admin UI writes here; the storefront/Virtual Try-On reads from here.
+// We keep the table name `group_products` to match the project's SQL naming convention.
+// If an older `group_products` table already exists, missing catalog columns are added
+// without replacing existing rows.
+// =====================================================
+const PRODUCT_COLUMNS = {
+  name: ['name', 'product_name'],
+  subtitle: ['subtitle', 'sub_title'],
+  colorName: ['color_name', 'colorName', 'color'],
+  category: ['category'],
+  shape: ['shape'],
+  material: ['material'],
+  price: ['price'],
+  originalPrice: ['original_price', 'originalPrice'],
+  discountPercentage: ['discount_percentage', 'discountPercentage'],
+  rating: ['rating'],
+  reviewCount: ['review_count', 'reviewCount'],
+  salesCount: ['sales_count', 'salesCount'],
+  tag: ['tag'],
+  badge: ['badge'],
+  stockStatus: ['stock_status', 'stockStatus'],
+  stockCount: ['stock_count', 'stockCount'],
+  images: ['images'],
+  imageUrl: ['image_url', 'imageUrl'],
+  overlayImage: ['overlay_image', 'overlayImage'],
+  model3d: ['model_3d', 'model3d'],
+  tryOnScale: ['try_on_scale', 'tryOnScale'],
+  tryOnOffsetX: ['try_on_offset_x', 'tryOnOffsetX'],
+  tryOnOffsetY: ['try_on_offset_y', 'tryOnOffsetY'],
+  tryOnOffsetZ: ['try_on_offset_z', 'tryOnOffsetZ'],
+  lensType: ['lens_type', 'lensType'],
+  weight: ['weight'],
+  warranty: ['warranty'],
+  size: ['size'],
+  description: ['description'],
+};
+
+const PRODUCT_ADD_COLUMNS = {
+  subtitle: "VARCHAR(255) NULL",
+  color_name: "VARCHAR(255) NOT NULL DEFAULT 'สีมาตรฐาน'",
+  category: "VARCHAR(50) NOT NULL DEFAULT 'prescription'",
+  shape: "VARCHAR(50) NOT NULL DEFAULT 'round'",
+  material: "VARCHAR(50) NOT NULL DEFAULT 'titanium'",
+  price: "DECIMAL(12,2) NOT NULL DEFAULT 0",
+  original_price: "DECIMAL(12,2) NULL",
+  discount_percentage: "DECIMAL(5,2) NULL",
+  rating: "DECIMAL(3,2) NOT NULL DEFAULT 0",
+  review_count: "INT NOT NULL DEFAULT 0",
+  sales_count: "VARCHAR(100) NOT NULL DEFAULT '0'",
+  tag: "VARCHAR(100) NULL",
+  badge: "VARCHAR(50) NULL",
+  stock_status: "VARCHAR(30) NOT NULL DEFAULT 'in_stock'",
+  stock_count: "INT NOT NULL DEFAULT 0",
+  images: "JSON NULL",
+  overlay_image: "LONGTEXT NULL",
+  model_3d: "LONGTEXT NULL",
+  try_on_scale: "DECIMAL(8,4) NULL",
+  try_on_offset_x: "DECIMAL(8,4) NULL",
+  try_on_offset_y: "DECIMAL(8,4) NULL",
+  try_on_offset_z: "DECIMAL(8,4) NULL",
+  lens_type: "VARCHAR(255) NOT NULL DEFAULT ''",
+  weight: "VARCHAR(100) NOT NULL DEFAULT ''",
+  warranty: "VARCHAR(255) NOT NULL DEFAULT ''",
+  size: "VARCHAR(100) NOT NULL DEFAULT ''",
+  description: "TEXT NULL",
+};
+
+async function ensureProductsTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS \`group_products\` (
+      \`product_id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      \`name\` VARCHAR(255) NOT NULL,
+      \`subtitle\` VARCHAR(255) NULL,
+      \`color_name\` VARCHAR(255) NOT NULL DEFAULT 'สีมาตรฐาน',
+      \`category\` VARCHAR(50) NOT NULL DEFAULT 'prescription',
+      \`shape\` VARCHAR(50) NOT NULL DEFAULT 'round',
+      \`material\` VARCHAR(50) NOT NULL DEFAULT 'titanium',
+      \`price\` DECIMAL(12,2) NOT NULL DEFAULT 0,
+      \`original_price\` DECIMAL(12,2) NULL,
+      \`discount_percentage\` DECIMAL(5,2) NULL,
+      \`rating\` DECIMAL(3,2) NOT NULL DEFAULT 0,
+      \`review_count\` INT NOT NULL DEFAULT 0,
+      \`sales_count\` VARCHAR(100) NOT NULL DEFAULT '0',
+      \`tag\` VARCHAR(100) NULL,
+      \`badge\` VARCHAR(50) NULL,
+      \`stock_status\` VARCHAR(30) NOT NULL DEFAULT 'in_stock',
+      \`stock_count\` INT NOT NULL DEFAULT 0,
+      \`images\` JSON NULL,
+      \`overlay_image\` LONGTEXT NULL,
+      \`model_3d\` LONGTEXT NULL,
+      \`try_on_scale\` DECIMAL(8,4) NULL,
+      \`try_on_offset_x\` DECIMAL(8,4) NULL,
+      \`try_on_offset_y\` DECIMAL(8,4) NULL,
+      \`try_on_offset_z\` DECIMAL(8,4) NULL,
+      \`lens_type\` VARCHAR(255) NOT NULL DEFAULT '',
+      \`weight\` VARCHAR(100) NOT NULL DEFAULT '',
+      \`warranty\` VARCHAR(255) NOT NULL DEFAULT '',
+      \`size\` VARCHAR(100) NOT NULL DEFAULT '',
+      \`description\` TEXT NULL,
+      \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`product_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Add fields required by the current frontend to an older group_products table.
+  const [rows] = await pool.query("SHOW COLUMNS FROM `group_products`");
+  const existing = new Set(rows.map((row) => row.Field));
+
+  for (const [column, definition] of Object.entries(PRODUCT_ADD_COLUMNS)) {
+    if (!existing.has(column)) {
+      await pool.query(`ALTER TABLE \`group_products\` ADD COLUMN \`${column}\` ${definition}`);
+    }
+  }
+}
+
+async function getProductSchema() {
+  const [rows] = await pool.query("SHOW COLUMNS FROM `group_products`");
+  const columns = rows.map((row) => row.Field);
+  const findColumn = (aliases) => aliases.find((name) => columns.includes(name)) || null;
+
+  // Support both the new product_id key and common legacy id column names.
+  const idColumn = ['product_id', 'id', 'group_product_id'].find((name) => columns.includes(name));
+  if (!idColumn) throw new Error('group_products ไม่มีคอลัมน์รหัสสินค้า (product_id/id/group_product_id)');
+
+  const map = {};
+  for (const [key, aliases] of Object.entries(PRODUCT_COLUMNS)) {
+    map[key] = findColumn(aliases);
+  }
+
+  if (!map.name) throw new Error('group_products ไม่มีคอลัมน์ name/product_name');
+  if (!map.price) throw new Error('group_products ไม่มีคอลัมน์ price');
+
+  return { idColumn, columns, map };
+}
+
+function parseProductImages(row, schema) {
+  const jsonValue = schema.map.images ? row[schema.map.images] : null;
+  const imageUrl = schema.map.imageUrl ? row[schema.map.imageUrl] : null;
+
+  if (Array.isArray(jsonValue)) return jsonValue.filter(Boolean).map(String);
+  if (typeof jsonValue === 'string' && jsonValue.trim()) {
+    try {
+      const parsed = JSON.parse(jsonValue);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
+    } catch {}
+    return [jsonValue];
+  }
+  if (imageUrl) return [String(imageUrl)];
+  return [];
+}
+
+function numberOr(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function rowToProduct(row, schema) {
+  const v = (key) => {
+    const column = schema.map[key];
+    return column ? row[column] : null;
+  };
+  const images = parseProductImages(row, schema);
+  const productId = row[schema.idColumn];
+
+  return {
+    id: String(productId),
+    name: String(v('name') || ''),
+    subtitle: v('subtitle') || undefined,
+    colorName: String(v('colorName') || 'สีมาตรฐาน'),
+    category: String(v('category') || 'prescription'),
+    shape: String(v('shape') || 'round'),
+    material: String(v('material') || 'titanium'),
+    price: numberOr(v('price')),
+    originalPrice: v('originalPrice') == null ? undefined : numberOr(v('originalPrice')),
+    discountPercentage: v('discountPercentage') == null ? undefined : numberOr(v('discountPercentage')),
+    rating: numberOr(v('rating')),
+    reviewCount: numberOr(v('reviewCount')),
+    salesCount: String(v('salesCount') || '0'),
+    tag: v('tag') || undefined,
+    badge: v('badge') === 'Best Seller' || v('badge') === 'New' ? v('badge') : undefined,
+    stockStatus: String(v('stockStatus') || 'in_stock'),
+    stockCount: v('stockCount') == null ? undefined : numberOr(v('stockCount')),
+    images,
+    overlayImage: v('overlayImage') || undefined,
+    model3d: v('model3d') || undefined,
+    tryOnScale: v('tryOnScale') == null ? undefined : numberOr(v('tryOnScale')),
+    tryOnOffsetX: v('tryOnOffsetX') == null ? undefined : numberOr(v('tryOnOffsetX')),
+    tryOnOffsetY: v('tryOnOffsetY') == null ? undefined : numberOr(v('tryOnOffsetY')),
+    tryOnOffsetZ: v('tryOnOffsetZ') == null ? undefined : numberOr(v('tryOnOffsetZ')),
+    lensType: String(v('lensType') || ''),
+    weight: String(v('weight') || ''),
+    warranty: String(v('warranty') || ''),
+    size: String(v('size') || ''),
+    description: String(v('description') || ''),
+  };
+}
+
+function authFromRequest(req) {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(header.slice(7), JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+function requireAdmin(req, res, next) {
+  const user = authFromRequest(req);
+  if (!user) return res.status(401).json({ success: false, message: 'กรุณาเข้าสู่ระบบก่อน' });
+  if (user.role !== 'admin') return res.status(403).json({ success: false, message: 'เฉพาะผู้ดูแลระบบเท่านั้น' });
+  req.authUser = user;
+  next();
+}
+
+function buildProductDbValues(input = {}) {
+  return {
+    name: String(input.name || '').trim(),
+    subtitle: input.subtitle == null ? null : String(input.subtitle).trim(),
+    colorName: String(input.colorName || 'สีมาตรฐาน').trim(),
+    category: String(input.category || 'prescription'),
+    shape: String(input.shape || 'round'),
+    material: String(input.material || 'titanium'),
+    price: numberOr(input.price),
+    originalPrice: input.originalPrice == null ? null : numberOr(input.originalPrice),
+    discountPercentage: input.discountPercentage == null ? null : numberOr(input.discountPercentage),
+    rating: numberOr(input.rating),
+    reviewCount: numberOr(input.reviewCount),
+    salesCount: String(input.salesCount || '0'),
+    tag: input.tag == null ? null : String(input.tag),
+    badge: input.badge === 'Best Seller' || input.badge === 'New' ? input.badge : null,
+    stockStatus: String(input.stockStatus || 'in_stock'),
+    stockCount: input.stockCount == null ? 0 : numberOr(input.stockCount),
+    images: Array.isArray(input.images) ? input.images.filter(Boolean).map(String) : [],
+    overlayImage: input.overlayImage == null ? null : String(input.overlayImage),
+    model3d: input.model3d == null ? null : String(input.model3d),
+    tryOnScale: input.tryOnScale == null ? null : numberOr(input.tryOnScale),
+    tryOnOffsetX: input.tryOnOffsetX == null ? null : numberOr(input.tryOnOffsetX),
+    tryOnOffsetY: input.tryOnOffsetY == null ? null : numberOr(input.tryOnOffsetY),
+    tryOnOffsetZ: input.tryOnOffsetZ == null ? null : numberOr(input.tryOnOffsetZ),
+    lensType: String(input.lensType || ''),
+    weight: String(input.weight || ''),
+    warranty: String(input.warranty || ''),
+    size: String(input.size || ''),
+    description: String(input.description || ''),
+  };
+}
+
+async function insertProduct(input) {
+  const schema = await getProductSchema();
+  const values = buildProductDbValues(input);
+  if (!values.name) throw new Error('กรุณากรอกชื่อสินค้า');
+
+  const fieldValues = [];
+  const placeholders = [];
+  const params = [];
+
+  for (const [key, value] of Object.entries(values)) {
+    const column = schema.map[key];
+    if (!column) continue;
+    // If an old schema has a dedicated image_url field but no JSON images field,
+    // store the first image there.
+    let dbValue = value;
+    if (key === 'images' && column !== schema.map.images && schema.map.imageUrl) continue;
+    if (key === 'images') dbValue = JSON.stringify(value);
+    fieldValues.push(`\`${column}\``);
+    placeholders.push('?');
+    params.push(dbValue);
+  }
+
+  if (schema.map.imageUrl && !schema.map.images) {
+    fieldValues.push(`\`${schema.map.imageUrl}\``);
+    placeholders.push('?');
+    params.push(values.images[0] || null);
+  }
+
+  const [result] = await pool.query(
+    `INSERT INTO \`group_products\` (${fieldValues.join(', ')}) VALUES (${placeholders.join(', ')})`,
+    params
+  );
+
+  const id = result.insertId;
+  const [rows] = await pool.query(
+    `SELECT * FROM \`group_products\` WHERE \`${schema.idColumn}\` = ? LIMIT 1`,
+    [id]
+  );
+  if (!rows.length) throw new Error('บันทึกสินค้าแล้วแต่ไม่พบข้อมูลที่เพิ่มใน SQL');
+  return rowToProduct(rows[0], schema);
+}
+
+async function updateProductById(id, input) {
+  const schema = await getProductSchema();
+  const currentRows = await pool.query(
+    `SELECT * FROM \`group_products\` WHERE \`${schema.idColumn}\` = ? LIMIT 1`,
+    [id]
+  );
+  if (!currentRows[0].length) return null;
+
+  const current = rowToProduct(currentRows[0][0], schema);
+  const merged = buildProductDbValues({ ...current, ...input, id });
+
+  const assignments = [];
+  const params = [];
+  for (const [key, value] of Object.entries(merged)) {
+    const column = schema.map[key];
+    if (!column) continue;
+    if (key === 'images' && schema.map.images) {
+      assignments.push(`\`${column}\` = ?`);
+      params.push(JSON.stringify(value));
+    } else if (key !== 'images') {
+      assignments.push(`\`${column}\` = ?`);
+      params.push(value);
+    }
+  }
+  if (schema.map.imageUrl && !schema.map.images && Object.prototype.hasOwnProperty.call(input, 'images')) {
+    assignments.push(`\`${schema.map.imageUrl}\` = ?`);
+    params.push(merged.images[0] || null);
+  }
+
+  if (!assignments.length) return current;
+  params.push(id);
+  await pool.query(
+    `UPDATE \`group_products\` SET ${assignments.join(', ')} WHERE \`${schema.idColumn}\` = ?`,
+    params
+  );
+
+  const [rows] = await pool.query(
+    `SELECT * FROM \`group_products\` WHERE \`${schema.idColumn}\` = ? LIMIT 1`,
+    [id]
+  );
+  return rows.length ? rowToProduct(rows[0], schema) : null;
+}
+
 async function bootstrap() {
   try {
     await ensurePasswordResetsTable();
-    console.log("Database ready: `group_users` + `password_resets`");
+    await ensureProductsTable();
+    console.log("Database ready: `group_users` + `password_resets` + `group_products`");
   } catch (err) {
     console.error("DB BOOTSTRAP ERROR:", err);
   }
@@ -101,6 +439,65 @@ async function sendOtpEmail(toEmail, otp) {
 
   if (error) throw error;
 }
+
+// =====================================================
+// Product catalog API
+// GET is public so storefront + Virtual Try-On always read from SQL.
+// POST/PUT/DELETE are admin-only and persist directly to `group_products`.
+// =====================================================
+app.get("/api/products", async (_req, res) => {
+  try {
+    const schema = await getProductSchema();
+    const [rows] = await pool.query(
+      `SELECT * FROM \`group_products\` ORDER BY \`${schema.idColumn}\` DESC`
+    );
+    return res.json({
+      success: true,
+      products: rows.map((row) => rowToProduct(row, schema)),
+    });
+  } catch (err) {
+    console.error("GET PRODUCTS ERROR:", err);
+    return res.status(500).json({ success: false, message: "อ่านรายการสินค้าจาก SQL ไม่สำเร็จ" });
+  }
+});
+
+app.post("/api/products", requireAdmin, async (req, res) => {
+  try {
+    const product = await insertProduct(req.body || {});
+    return res.status(201).json({ success: true, product });
+  } catch (err) {
+    console.error("CREATE PRODUCT ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message || "เพิ่มสินค้าใน SQL ไม่สำเร็จ" });
+  }
+});
+
+app.put("/api/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const product = await updateProductById(req.params.id, req.body || {});
+    if (!product) return res.status(404).json({ success: false, message: "ไม่พบสินค้าที่ต้องการแก้ไข" });
+    return res.json({ success: true, product });
+  } catch (err) {
+    console.error("UPDATE PRODUCT ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message || "แก้ไขสินค้าใน SQL ไม่สำเร็จ" });
+  }
+});
+
+app.delete("/api/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const schema = await getProductSchema();
+    const [result] = await pool.query(
+      `DELETE FROM \`group_products\` WHERE \`${schema.idColumn}\` = ?`,
+      [req.params.id]
+    );
+    if (!result.affectedRows) {
+      return res.status(404).json({ success: false, message: "ไม่พบสินค้าที่ต้องการลบ" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE PRODUCT ERROR:", err);
+    return res.status(500).json({ success: false, message: "ลบสินค้าใน SQL ไม่สำเร็จ" });
+  }
+});
 
 app.get("/", (req, res) => {
   res.json({ success: true, message: "TATOE Optical auth API is running" });

@@ -5,7 +5,7 @@ interface AdminProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   productToEdit?: Product | null;
-  onSave: (productData: Partial<Product> & { id?: string }) => void;
+  onSave: (productData: Partial<Product> & { id?: string }) => void | Promise<boolean>;
   onDelete?: (productId: string) => void;
 }
 
@@ -109,7 +109,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setFormError('กรุณากรอกชื่อรุ่นแว่นตา');
@@ -123,7 +123,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       ? Math.round(((numOriginal - numPrice) / numOriginal) * 100)
       : undefined;
 
-    onSave({
+    const result = await onSave({
       id: productToEdit?.id,
       name: name.trim(),
       subtitle: subtitle.trim() || undefined,
@@ -144,7 +144,9 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       description: description.trim()
     });
 
-    onClose();
+    // When the callback is async, close only after SQL confirms the write.
+    // A failed request leaves the form open so the admin can retry.
+    if (result !== false) onClose();
   };
 
   return (

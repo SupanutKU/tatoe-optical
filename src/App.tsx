@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScreenId, Product, CartItem, UserProfile, Prescription, UserAddress, ChatThread, ChatProductAttachment, ProductReview, DeliveryOrder, DeliveryStage, AppNotification } from './types';
-import { MOCK_PRODUCTS, MOCK_USER, INITIAL_CART, formatAddress, INITIAL_CHAT_THREADS, INITIAL_REVIEWS, INITIAL_DELIVERY_ORDER, INITIAL_NOTIFICATIONS, DELIVERY_STAGE_CONFIG } from './data/mockData';
+import { MOCK_USER, INITIAL_CART, formatAddress, INITIAL_CHAT_THREADS, INITIAL_REVIEWS, INITIAL_DELIVERY_ORDER, INITIAL_NOTIFICATIONS, DELIVERY_STAGE_CONFIG } from './data/mockData';
 import { BottomNav } from './components/BottomNav';
 import { HomeScreen } from './components/HomeScreen';
 import { SearchScreen } from './components/SearchScreen';
@@ -14,6 +14,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { RegisterScreen } from './components/RegisterScreen';
 import { ForgotPasswordScreen } from './components/ForgotPasswordScreen';
 import { loadSession, clearSession, StoredSession } from './constants/api';
+import { fetchProducts, createProduct, updateProduct, deleteProduct } from './lib/productApi';
 import { VirtualTryOnModal } from './components/VirtualTryOnModal';
 import { PrescriptionModal } from './components/PrescriptionModal';
 import { ReceiptModal } from './components/ReceiptModal';
@@ -130,8 +131,30 @@ export default function App() {
     setUser(MOCK_USER);
     navigateTo('login');
   };
-  // Product catalog intentionally starts empty. Products will be supplied by SQL/API later.
+  // SQL is the single source of truth for the catalog.
+  // The UI keeps only a synchronized in-memory copy for rendering.
   const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProducts()
+      .then((rows) => {
+        if (cancelled) return;
+        setProducts(rows);
+        setSelectedProduct((current) => current && rows.some((p) => p.id === current.id) ? current : (rows[0] || null));
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('โหลดสินค้าจาก SQL ไม่สำเร็จ:', error);
+          showToast('เชื่อมต่อรายการสินค้าจาก SQL ไม่สำเร็จ กรุณาตรวจสอบ backend / ฐานข้อมูล');
+        }
+      })
+      .finally(() => {
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [cartItems, setCartItems] = useState<CartItem[]>(INITIAL_CART);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [wishlist, setWishlist] = useState<string[]>([]);
@@ -587,71 +610,32 @@ export default function App() {
     setIsAdminProductModalOpen(true);
   };
 
-  const handleSaveProduct = (data: Partial<Product> & { id?: string }) => {
-    if (data.id) {
-      // Edit existing product
-      setProducts((prev) =>
-        prev.map((p) => {
-          if (p.id === data.id) {
-            return {
-              ...p,
-              ...data,
-              images: data.images && data.images.length > 0 ? data.images : p.images
-            } as Product;
-          }
-          return p;
-        })
-      );
-      if (selectedProduct?.id === data.id) {
-        setSelectedProduct((prev) => ({
-          ...prev,
-          ...data,
-          images: data.images && data.images.length > 0 ? data.images : prev.images
-        } as Product));
+  const handleSaveProduct = async (data: Partial<Product> & { id?: string }) => {
+    try {
+      if (data.id) {
+        // Update SQL first. The UI is updated only after the database confirms the write.
+        const saved = await updateProduct(data.id, data);
+        setProducts((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+        setSelectedProduct((prev) => (prev?.id === saved.id ? saved : prev));
+        setCartItems((prev) =>
+          prev.map((item) => item.product.id === saved.id ? { ...item, product: saved } : item)
+        );
+        showToast(`บันทึกการแก้ไข "${saved.name}" ลง SQL เรียบร้อยแล้ว`);
+      } else {
+        // Let SQL generate the canonical product id, then use that same row everywhere.
+        const saved = await createProduct(data);
+        setProducts((prev) => [saved, ...prev]);
+        setSelectedProduct((prev) => prev || saved);
+        showToast(`เพิ่มสินค้า "${saved.name}" ลง SQL สำเร็จแล้ว`);
       }
-      setCartItems((prev) =>
-        prev.map((item) =>
-          item.product.id === data.id
-            ? { ...item, product: { ...item.product, ...data } as Product }
-            : item
-        )
-      );
-      showToast(`บันทึกการแก้ไข "${data.name}" เรียบร้อยแล้ว`);
-    } else {
-      // Add new product
-      const newId = `product-${Date.now()}`;
-      const defaultImg = data.images && data.images.length > 0 ? data.images : [];
-      const newProduct: Product = {
-        id: newId,
-        name: data.name || 'แว่นตารุ่นใหม่',
-        subtitle: data.subtitle || 'Big Eye Premium Collection',
-        price: Number(data.price) || 0,
-        originalPrice: Number(data.originalPrice) || undefined,
-        rating: Number(data.rating) || 5.0,
-        reviewCount: Number(data.reviewCount) || 1,
-        salesCount: '1.2k+ ชิ้น',
-        category: data.category || 'prescription',
-        shape: data.shape || 'round',
-        material: data.material || 'titanium',
-        colorName: data.colorName || 'ดำด้าน Matte Black',
-        images: defaultImg,
-        tag: data.tag || 'ใหม่ New',
-        badge: data.badge || 'New',
-        lensType: data.lensType || 'เลนส์มัลติโค้ต กรองแสง UV400',
-        weight: data.weight || '8.5 กรัม',
-        warranty: data.warranty || 'รับประกันกรอบแว่น 1 ปีเต็ม',
-        size: data.size || '51-18-142 มม.',
-        description: data.description || 'แว่นตาน้ำหนักเบาพิเศษ ออกแบบสำหรับสรีระใบหน้าชาวเอเชีย',
-        stockStatus: data.stockStatus || 'in_stock',
-        stockCount: Number(data.stockCount) || 15
-      };
-
-      setProducts((prev) => [newProduct, ...prev]);
-      showToast(`เพิ่มสินค้าใหม่ "${newProduct.name}" สำเร็จแล้ว!`);
+      setIsAdminProductModalOpen(false);
+      setEditingProduct(null);
+      return true;
+    } catch (error) {
+      console.error('บันทึกสินค้าไม่สำเร็จ:', error);
+      showToast(error instanceof Error ? error.message : 'บันทึกสินค้าใน SQL ไม่สำเร็จ');
+      return false;
     }
-
-    setIsAdminProductModalOpen(false);
-    setEditingProduct(null);
   };
 
   const handleRequestDeleteProduct = (productId: string) => {
@@ -661,29 +645,45 @@ export default function App() {
     }
   };
 
-  const handleConfirmDeleteProduct = (productId: string) => {
+  const handleConfirmDeleteProduct = async (productId: string) => {
     const target = products.find((p) => p.id === productId);
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
-    setWishlist((prev) => prev.filter((id) => id !== productId));
-    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
-
-    if (selectedProduct?.id === productId) {
-      const remaining = products.filter((p) => p.id !== productId);
-      if (remaining.length > 0) {
-        setSelectedProduct(remaining[0]);
-      }
-      if (currentScreen === 'detail') {
-        navigateTo('home');
-      }
+    if (!target) {
+      setProductToDelete(null);
+      return;
     }
-    setProductToDelete(null);
-    showToast(`ลบสินค้า "${target?.name || ''}" ออกจากระบบเรียบร้อยแล้ว 🗑️`);
+
+    try {
+      // Delete from SQL first so a refresh cannot bring the deleted product back.
+      await deleteProduct(productId);
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
+      setWishlist((prev) => prev.filter((id) => id !== productId));
+      setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
+
+      if (selectedProduct?.id === productId) {
+        const remaining = products.filter((p) => p.id !== productId);
+        setSelectedProduct(remaining[0] || null);
+        if (currentScreen === 'detail') navigateTo('home');
+      }
+
+      showToast(`ลบสินค้า "${target.name}" จาก SQL เรียบร้อยแล้ว 🗑️`);
+    } catch (error) {
+      console.error('ลบสินค้าไม่สำเร็จ:', error);
+      showToast(error instanceof Error ? error.message : 'ลบสินค้าใน SQL ไม่สำเร็จ');
+    } finally {
+      setProductToDelete(null);
+    }
   };
 
-  const handleResetProducts = () => {
-    setProducts([]);
-    setSelectedProduct(null);
-    showToast('ล้างรายการสินค้าในหน่วยความจำแล้ว — ระบบพร้อมรับข้อมูลจาก SQL');
+  const handleResetProducts = async () => {
+    try {
+      const rows = await fetchProducts();
+      setProducts(rows);
+      setSelectedProduct((current) => current && rows.some((p) => p.id === current.id) ? current : (rows[0] || null));
+      showToast(`ซิงค์สินค้า ${rows.length} รายการจาก SQL เรียบร้อยแล้ว`);
+    } catch (error) {
+      console.error('ซิงค์สินค้าไม่สำเร็จ:', error);
+      showToast(error instanceof Error ? error.message : 'ซิงค์สินค้าจาก SQL ไม่สำเร็จ');
+    }
   };
 
   const handleShare = () => {

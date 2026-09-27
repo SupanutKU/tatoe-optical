@@ -1,6 +1,12 @@
 // ที่อยู่ของ backend server (รองรับทั้ง unified dev server ในพอร์ต 3000 เดียวกัน และ external backend)
 export const getApiBaseUrl = (): string => {
-  return (import.meta as any).env?.VITE_API_URL || '';
+  const configured = (import.meta as any).env?.VITE_API_URL;
+  if (configured) return String(configured).replace(/\/$/, '');
+  // Local development uses the SQL-backed Express backend.
+  // Production deployments should set VITE_API_URL explicitly when the API is on another origin.
+  return typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3113'
+    : '';
 };
 
 export const API_LOGIN_URL = `${getApiBaseUrl()}/api/login`;
