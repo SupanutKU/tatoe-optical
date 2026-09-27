@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Product, UserProfile, ScreenId } from '../types';
 import { APP_LOGO } from '../data/mockData';
 import { AIRecommendationSection } from './AIRecommendationSection';
+import { LowStockBadge, isProductLowStock } from './LowStockBadge';
 
 interface HomeScreenProps {
   user: UserProfile;
@@ -17,7 +18,6 @@ interface HomeScreenProps {
   onOpenVirtualTryOn: () => void;
   onOpenVirtualTryOnWithProduct?: (product: Product) => void;
   onResetShapeHistory?: () => void;
-  onSimulateClickShape?: (shape: string) => void;
   onOpenAddProduct?: () => void;
   onEditProduct?: (product: Product) => void;
   onDeleteProduct?: (productId: string) => void;
@@ -38,7 +38,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenVirtualTryOn,
   onOpenVirtualTryOnWithProduct,
   onResetShapeHistory,
-  onSimulateClickShape,
   onOpenAddProduct,
   onEditProduct,
   onDeleteProduct,
@@ -217,6 +216,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </div>
 
+      {/* Online Vision Test Service Banner (วัดสายตาสั้น-ยาว เอียง ตาบอดสี) */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-surface-container-low via-surface-container to-secondary-fixed/30 border border-primary/20 shadow-xs flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-primary text-white flex items-center justify-center shrink-0 shadow-sm">
+              <span className="material-symbols-outlined text-[24px]">visibility</span>
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-bold text-sm text-on-surface">ระบบตรวจวัดสายตาออนไลน์</h3>
+                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  ใหม่ พร้อมใช้งาน
+                </span>
+              </div>
+              <p className="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">
+                วัดสายตาสั้น/ยาว • <strong>ตรวจวัดค่าความเอียง (Astigmatism)</strong> • <strong>คัดกรองตาบอดสี (Ishihara)</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-1 border-t border-outline-variant/15">
+          <div className="flex items-center gap-3 text-[11px] text-on-surface-variant">
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px] text-teal-600">check_circle</span>
+              รู้ผลทันที
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px] text-teal-600">check_circle</span>
+              บันทึกตัดแว่นได้เลย
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('vision-test')}
+            className="px-3.5 py-2 rounded-xl bg-primary text-on-primary font-bold text-xs shadow-xs active:scale-95 transition-all flex items-center gap-1 hover:bg-primary-container cursor-pointer"
+          >
+            <span>เริ่มวัดสายตา</span>
+            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+          </button>
+        </div>
+      </div>
+
       {/* 3. Category Selector Tabs */}
       <div className="flex flex-col space-y-2">
         <div className="flex items-center justify-between">
@@ -310,7 +352,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onAddToCart={onAddToCart}
         onOpenVirtualTryOnWithProduct={onOpenVirtualTryOnWithProduct}
         onResetShapeHistory={onResetShapeHistory}
-        onSimulateClickShape={onSimulateClickShape}
       />
 
       {/* 4. Section 1: Featured Products (สินค้าแนะนำพิเศษ) */}
@@ -411,10 +452,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </span>
                   </button>
 
-                  {!isAdmin && item.badge && (
-                    <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-secondary text-on-secondary text-[10px] font-bold shadow-xs">
-                      {item.badge}
-                    </span>
+                  {!isAdmin && isProductLowStock(item.stockStatus, item.stockCount) ? (
+                    <LowStockBadge
+                      stockStatus={item.stockStatus}
+                      stockCount={item.stockCount}
+                      className="absolute top-2 left-2 z-10"
+                    />
+                  ) : (
+                    !isAdmin && item.badge && (
+                      <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-secondary text-on-secondary text-[10px] font-bold shadow-xs">
+                        {item.badge}
+                      </span>
+                    )
                   )}
 
                   {/* Compare Toggle Button */}
@@ -458,9 +507,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <h4 className="font-bold text-sm text-on-surface truncate group-hover:text-primary transition-colors">
                   {item.name}
                 </h4>
-                <span className="text-[11px] text-on-surface-variant mb-2 truncate">
-                  {item.colorName}
-                </span>
+                <div className="flex items-center justify-between text-[11px] mb-2 truncate">
+                  <span className="text-on-surface-variant truncate">
+                    {item.colorName}
+                  </span>
+                  {isProductLowStock(item.stockStatus, item.stockCount) && (
+                    <span className="shrink-0 text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200/80 ml-1">
+                      เหลือ {item.stockCount || 3} ชิ้น
+                    </span>
+                  )}
+                </div>
 
                 <div className="mt-auto flex items-center justify-between pt-1">
                   <span className="font-bold text-sm text-primary">฿{item.price.toLocaleString()}</span>
@@ -502,11 +558,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               className="flex items-center p-space-md bg-surface-container-lowest rounded-2xl shadow-sm hover:shadow-md transition-all gap-space-md cursor-pointer border border-outline-variant/10 relative"
             >
               <div className="w-24 h-24 rounded-xl bg-surface-container-low shrink-0 flex items-center justify-center p-2 relative overflow-hidden">
-                {item.tag && (
+                {isProductLowStock(item.stockStatus, item.stockCount) ? (
+                  <LowStockBadge
+                    stockStatus={item.stockStatus}
+                    stockCount={item.stockCount}
+                    variant="compact"
+                    className="absolute top-1 left-1 z-10"
+                  />
+                ) : item.tag ? (
                   <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-surface-container-highest text-primary font-bold text-[10px]">
                     {item.tag}
                   </span>
-                )}
+                ) : null}
                 <img
                   src={item.images[0]}
                   alt={item.name}

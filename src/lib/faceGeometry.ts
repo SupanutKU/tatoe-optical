@@ -15,6 +15,8 @@ export const LM = {
   RIGHT_EYE_INNER: 362,
   NOSE_BRIDGE: 168,
   NOSE_TIP: 1,
+  LEFT_IRIS_CENTER: 468,
+  RIGHT_IRIS_CENTER: 473,
 } as const;
 
 export interface Point2D {
@@ -76,12 +78,15 @@ export function computeFaceMetrics(
   const rightForeheadEdge = p(LM.RIGHT_FOREHEAD_EDGE);
   const noseBridge = p(LM.NOSE_BRIDGE);
 
+  const leftIris = landmarks.length > LM.LEFT_IRIS_CENTER ? p(LM.LEFT_IRIS_CENTER) : leftEyeInner;
+  const rightIris = landmarks.length > LM.RIGHT_IRIS_CENTER ? p(LM.RIGHT_IRIS_CENTER) : rightEyeInner;
+
   const eyeCenter: Point2D = {
-    x: (leftEyeOuter.x + rightEyeOuter.x) / 2,
-    y: (leftEyeOuter.y + rightEyeOuter.y) / 2,
+    x: (leftIris.x + rightIris.x) / 2,
+    y: (leftIris.y + rightIris.y) / 2,
   };
 
-  const eyeDistancePx = distance(leftEyeOuter, rightEyeOuter);
+  const eyeDistancePx = distance(leftIris, rightIris);
   const faceWidthPx = distance(leftCheek, rightCheek);
   const faceHeightPx = distance(forehead, chin);
   const jawWidthPx = distance(leftJaw, rightJaw);

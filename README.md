@@ -84,3 +84,9 @@ The Virtual Try-On screen now uses a transparent real-time 3D rendering layer on
 - Each product can optionally define `model3d` and per-model fit values in the `Product` type for future GLB/GLTF integration.
 - The 3D renderer is loaded from the official Babylon.js CDN at runtime.
 - Upload/captured-photo mode keeps the existing 2D image overlay path.
+
+## Product catalog state
+
+The bundled demo/seed product catalog has been removed. The application still contains the product, cart, search, order, admin, and Virtual Try-On system code, but it starts with an empty product collection so no demo products, prices, product images, or seeded product reviews are bundled.
+
+The intended source of truth for products is the SQL/API layer. Add your product rows there and connect the existing `products` state to that API without reintroducing hard-coded catalog data.

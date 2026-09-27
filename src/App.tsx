@@ -23,6 +23,7 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { PushNotificationBanner } from './components/PushNotificationBanner';
 import { NotificationsModal } from './components/NotificationsModal';
 import { ClaimScreen } from './components/ClaimScreen';
+import { VisionTestScreen } from './components/visionTest/VisionTestScreen';
 
 // แปลงข้อมูลผู้ใช้ที่ backend ส่งกลับมา (คอลัมน์จากตาราง `group`) ให้เป็นรูปแบบ UserProfile
 // ของแอป ฟิลด์ที่ backend ยังไม่มี (ที่อยู่ทั้งหมด, จำนวนออเดอร์ ฯลฯ) จะ fallback ไปใช้ค่า mock เดิม
@@ -50,9 +51,50 @@ const mapSessionUserToProfile = (apiUser: StoredSession['user']): UserProfile =>
   }
 });
 
+type NavigationDirection = 'forward' | 'back';
+
+/**
+ * Calculates whether navigation is moving forward (slides in from right)
+ * or backward (slides in from left) to deliver a seamless native feel.
+ */
+const getNavDirection = (from: ScreenId, to: ScreenId): NavigationDirection => {
+  const TAB_ORDER: Record<string, number> = {
+    home: 0,
+    search: 1,
+    cart: 2,
+    orders: 3,
+    profile: 4
+  };
+
+  // If returning from subscreen to a main tab
+  if (['detail', 'checkout', 'claims', 'vision-test'].includes(from) && TAB_ORDER[to] !== undefined) {
+    return 'back';
+  }
+  // If moving from a main tab to a subscreen
+  if (['detail', 'checkout', 'claims', 'vision-test'].includes(to)) {
+    return 'forward';
+  }
+  // Between auth screens
+  if (from === 'login' && (to === 'register' || to === 'forgot-password')) {
+    return 'forward';
+  }
+  if ((from === 'register' || from === 'forgot-password') && to === 'login') {
+    return 'back';
+  }
+  if (from === 'welcome' && to === 'login') {
+    return 'forward';
+  }
+  // Tab-to-tab navigation
+  if (TAB_ORDER[from] !== undefined && TAB_ORDER[to] !== undefined) {
+    return TAB_ORDER[to] >= TAB_ORDER[from] ? 'forward' : 'back';
+  }
+  return 'forward';
+};
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('login');
   const [previousScreen, setPreviousScreen] = useState<ScreenId>('login');
+  const [navDirection, setNavDirection] = useState<NavigationDirection>('forward');
   const [user, setUser] = useState<UserProfile>(MOCK_USER);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -88,10 +130,11 @@ export default function App() {
     setUser(MOCK_USER);
     navigateTo('login');
   };
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  // Product catalog intentionally starts empty. Products will be supplied by SQL/API later.
+  const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>(INITIAL_CART);
-  const [selectedProduct, setSelectedProduct] = useState<Product>(MOCK_PRODUCTS[0]);
-  const [wishlist, setWishlist] = useState<string[]>(['urban-black', 'classic-01']);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [wishlist, setWishlist] = useState<string[]>([]);
   const [reviews, setReviews] = useState<ProductReview[]>(INITIAL_REVIEWS);
 
   // AI Recommendation shape tracking (คลิกดูบ่อยที่สุด)
@@ -102,8 +145,7 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    // ค่าเริ่มต้นจำลองประวัติการเข้าชมทรงสี่เหลี่ยมมากที่สุดเพื่อความสมบูรณ์แบบ
-    return { square: 4, round: 2, drop: 1 };
+    return {};
   });
 
   const recordShapeView = (shape?: string) => {
@@ -125,11 +167,6 @@ export default function App() {
       localStorage.setItem('bigeye_viewed_shapes', JSON.stringify(emptyHistory));
     } catch (e) {}
     showToast('ล้างประวัติการคลิกดูแว่นตาสำหรับระบบ AI เรียบร้อยแล้ว');
-  };
-
-  const handleSimulateClickShape = (shape: string) => {
-    recordShapeView(shape);
-    showToast(`AI บันทึกสถิติความสนใจ "${shape.toUpperCase()}" เพิ่มขึ้นแล้ว ✨`);
   };
 
   // Modals & Chat
@@ -228,10 +265,16 @@ export default function App() {
     }, 3500);
   };
 
-  const navigateTo = (screen: ScreenId) => {
+  const navigateTo = (screen: ScreenId, forcedDirection?: NavigationDirection) => {
+    if (screen === currentScreen) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const direction = forcedDirection || getNavDirection(currentScreen, screen);
+    setNavDirection(direction);
     setPreviousScreen(currentScreen);
     setCurrentScreen(screen);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   const handleSelectProduct = (product: Product) => {
@@ -523,7 +566,7 @@ export default function App() {
           rating: newAvg,
           reviewCount: (p.reviewCount || 0) + 1
         };
-        if (selectedProduct.id === p.id) {
+        if (selectedProduct?.id === p.id) {
           setSelectedProduct(updated);
         }
         return updated;
@@ -559,7 +602,7 @@ export default function App() {
           return p;
         })
       );
-      if (selectedProduct.id === data.id) {
+      if (selectedProduct?.id === data.id) {
         setSelectedProduct((prev) => ({
           ...prev,
           ...data,
@@ -577,19 +620,13 @@ export default function App() {
     } else {
       // Add new product
       const newId = `product-${Date.now()}`;
-      const defaultImg =
-        data.images && data.images.length > 0
-          ? data.images
-          : [
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuAZMBqH7_MCWY1cBhlruy859V0cxY-NxSQUxCG4zmhZafutZ28DzT077CdnA1wp1WD-ExOa29UHOjFnOqLZlTEO_p-5SkNIfoNo4It2cze4a4yE5RQnz6XMQfglI8V1VIANCK_-GY6cHv7hmrt_7v1DMt767zG2xO0OUXG4F8S4YnoTiTXv_BYkka0zl0dDFZLzvhxA6nORP00LLfFvlhWKTbNa8kGEpaq0Jv8VrgyCp8iOzL1suXWc'
-            ];
-
+      const defaultImg = data.images && data.images.length > 0 ? data.images : [];
       const newProduct: Product = {
         id: newId,
         name: data.name || 'แว่นตารุ่นใหม่',
         subtitle: data.subtitle || 'Big Eye Premium Collection',
-        price: Number(data.price) || 1290,
-        originalPrice: Number(data.originalPrice) || 1890,
+        price: Number(data.price) || 0,
+        originalPrice: Number(data.originalPrice) || undefined,
         rating: Number(data.rating) || 5.0,
         reviewCount: Number(data.reviewCount) || 1,
         salesCount: '1.2k+ ชิ้น',
@@ -630,7 +667,7 @@ export default function App() {
     setWishlist((prev) => prev.filter((id) => id !== productId));
     setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
 
-    if (selectedProduct.id === productId) {
+    if (selectedProduct?.id === productId) {
       const remaining = products.filter((p) => p.id !== productId);
       if (remaining.length > 0) {
         setSelectedProduct(remaining[0]);
@@ -644,8 +681,9 @@ export default function App() {
   };
 
   const handleResetProducts = () => {
-    setProducts(MOCK_PRODUCTS);
-    showToast('รีเซ็ตรายการสินค้ากลับสู่ค่าเริ่มต้นแล้ว');
+    setProducts([]);
+    setSelectedProduct(null);
+    showToast('ล้างรายการสินค้าในหน่วยความจำแล้ว — ระบบพร้อมรับข้อมูลจาก SQL');
   };
 
   const handleShare = () => {
@@ -670,6 +708,7 @@ export default function App() {
     { id: 'welcome', label: 'หน้าแรกต้อนรับ', icon: 'waving_hand' },
     { id: 'login', label: 'เข้าสู่ระบบ', icon: 'login' },
     { id: 'home', label: 'หน้าหลักร้าน', icon: 'home' },
+    { id: 'vision-test', label: 'ตรวจวัดสายตา & ตาบอดสี', icon: 'visibility' },
     { id: 'search', label: 'ค้นหาและตัวกรอง', icon: 'search' },
     { id: 'detail', label: 'รายละเอียดสินค้า', icon: 'visibility' },
     { id: 'cart', label: 'ตะกร้าสินค้า', icon: 'shopping_bag' },
@@ -689,7 +728,16 @@ export default function App() {
             isAuthenticated ? 'pt-4 pb-20' : 'pt-4'
           }`}
         >
-          {currentScreen === 'home' && (
+          {/* Subtle Native Slide-in Screen Container */}
+          <div
+            key={currentScreen}
+            className={`flex-1 flex flex-col w-full ${
+              navDirection === 'back'
+                ? 'animate-screen-slide-back'
+                : 'animate-screen-slide-forward'
+            }`}
+          >
+            {currentScreen === 'home' && (
             <HomeScreen
               user={user}
               products={products}
@@ -705,7 +753,6 @@ export default function App() {
                 setIsVirtualTryOnOpen(true);
               }}
               onResetShapeHistory={handleResetShapeHistory}
-              onSimulateClickShape={handleSimulateClickShape}
               onOpenAddProduct={handleOpenAddProduct}
               onEditProduct={handleOpenEditProduct}
               onDeleteProduct={handleRequestDeleteProduct}
@@ -728,21 +775,31 @@ export default function App() {
             />
           )}
 
-          {currentScreen === 'detail' && (
-            <ProductDetailScreen
-              product={selectedProduct}
-              isFavorite={wishlist.includes(selectedProduct.id)}
-              isAdmin={user.role === 'admin'}
-              reviews={reviews}
-              currentUser={user}
-              onToggleFavorite={() => handleToggleWishlist(selectedProduct.id)}
-              onAddToCart={handleAddToCart}
-              onOpenChat={(p) => handleOpenChat(p || selectedProduct)}
-              onEditProduct={handleOpenEditProduct}
-              onDeleteProduct={handleRequestDeleteProduct}
-              onAddReview={handleAddReview}
-            />
-          )}
+            {currentScreen === 'detail' && selectedProduct && (
+              <ProductDetailScreen
+                product={selectedProduct}
+                isFavorite={wishlist.includes(selectedProduct.id)}
+                isAdmin={user.role === 'admin'}
+                reviews={reviews}
+                currentUser={user}
+                onToggleFavorite={() => handleToggleWishlist(selectedProduct.id)}
+                onAddToCart={handleAddToCart}
+                onOpenChat={(p) => handleOpenChat(p || selectedProduct)}
+                onEditProduct={handleOpenEditProduct}
+                onDeleteProduct={handleRequestDeleteProduct}
+                onAddReview={handleAddReview}
+                onNavigate={navigateTo}
+              />
+            )}
+
+            {currentScreen === 'detail' && !selectedProduct && (
+              <div className="flex-1 flex items-center justify-center p-8 text-center">
+                <div>
+                  <p className="font-bold text-lg">ยังไม่มีข้อมูลสินค้า</p>
+                  <p className="mt-2 text-sm text-on-surface-variant">เพิ่มสินค้าในฐานข้อมูล SQL แล้วระบบจะแสดงรายการที่นี่</p>
+                </div>
+              </div>
+            )}
 
           {currentScreen === 'cart' && (
             <CartScreen
@@ -770,7 +827,6 @@ export default function App() {
             <OrdersScreen
               user={user}
               deliveryOrder={deliveryOrder}
-              onUpdateDeliveryStage={handleUpdateDeliveryStage}
               onOpenReceipt={() => setIsReceiptOpen(true)}
               onOpenChat={() => handleOpenChat()}
               onNavigate={navigateTo}
@@ -804,6 +860,15 @@ export default function App() {
             />
           )}
 
+          {currentScreen === 'vision-test' && (
+            <VisionTestScreen
+              user={user}
+              onNavigate={navigateTo}
+              onSavePrescription={handleSavePrescription}
+              onShowToast={showToast}
+            />
+          )}
+
           {currentScreen === 'welcome' && (
             <WelcomeScreen onNavigate={navigateTo} />
           )}
@@ -822,9 +887,10 @@ export default function App() {
             />
           )}
 
-          {currentScreen === 'forgot-password' && (
-            <ForgotPasswordScreen onNavigate={navigateTo} />
-          )}
+            {currentScreen === 'forgot-password' && (
+              <ForgotPasswordScreen onNavigate={navigateTo} />
+            )}
+          </div>
         </main>
 
         {isAuthenticated && (
@@ -882,7 +948,7 @@ export default function App() {
           isOpen={isVirtualTryOnOpen}
           onClose={() => setIsVirtualTryOnOpen(false)}
           products={products}
-          currentProduct={selectedProduct}
+          currentProduct={selectedProduct || undefined}
           onSelectProduct={(p) => setSelectedProduct(p)}
         />
 
@@ -892,6 +958,10 @@ export default function App() {
           onClose={() => setIsPrescriptionOpen(false)}
           prescription={user.prescription}
           onSave={handleSavePrescription}
+          onOpenVisionTest={() => {
+            setIsPrescriptionOpen(false);
+            navigateTo('vision-test');
+          }}
         />
 
         {/* Receipt Modal */}
@@ -934,7 +1004,6 @@ export default function App() {
           notifications={notifications}
           onMarkAllAsRead={handleMarkAllNotificationsAsRead}
           onSelectNotification={handleSelectNotification}
-          onTriggerTestStage={handleUpdateDeliveryStage}
         />
       </div>
     </div>

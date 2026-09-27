@@ -4,7 +4,85 @@ import { AddressModal } from './AddressModal';
 import { BranchAppointmentModal } from './BranchAppointmentModal';
 import { CouponModal } from './CouponModal';
 import { MemberBenefitsModal } from './MemberBenefitsModal';
+import { BiometricVerificationModal } from './BiometricVerificationModal';
 import { formatAddress } from '../data/mockData';
+import {
+  loadBiometricConfig,
+  saveBiometricConfig,
+  clearBiometricConfig,
+  BiometricAuthConfig
+} from '../constants/api';
+
+/**
+ * Helper to check whether a prescription's lastChecked date is older than 1 year.
+ */
+export const isPrescriptionDateOutdated = (lastChecked?: string): boolean => {
+  if (!lastChecked || !lastChecked.trim()) return false;
+
+  const normalized = lastChecked.trim().toLowerCase();
+
+  // If marked as today / recently updated, it is fresh
+  if (
+    normalized.includes('วันนี้') ||
+    normalized.includes('เมื่อวาน') ||
+    normalized.includes('ล่าสุด') ||
+    normalized.includes('today') ||
+    normalized.includes('just now')
+  ) {
+    return false;
+  }
+
+  const ONE_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  // Standard ISO/RFC date string parsing
+  const parsedTimestamp = Date.parse(normalized);
+  if (!isNaN(parsedTimestamp)) {
+    return now - parsedTimestamp > ONE_YEAR_MS;
+  }
+
+  // Thai short and full month names
+  const THAI_MONTHS: Record<string, number> = {
+    'ม.ค.': 0, 'มกราคม': 0, 'jan': 0, 'january': 0,
+    'ก.พ.': 1, 'กุมภาพันธ์': 1, 'feb': 1, 'february': 1,
+    'มี.ค.': 2, 'มีนาคม': 2, 'mar': 2, 'march': 2,
+    'เม.ย.': 3, 'เมษายน': 3, 'apr': 3, 'april': 3,
+    'พ.ค.': 4, 'พฤษภาคม': 4, 'may': 4,
+    'มิ.ย.': 5, 'มิถุนายน': 5, 'jun': 5, 'june': 5,
+    'ก.ค.': 6, 'กรกฎาคม': 6, 'jul': 6, 'july': 6,
+    'ส.ค.': 7, 'สิงหาคม': 7, 'aug': 7, 'august': 7,
+    'ก.ย.': 8, 'กันยายน': 8, 'sep': 8, 'september': 8,
+    'ต.ค.': 9, 'ตุลาคม': 9, 'oct': 9, 'october': 9,
+    'พ.ย.': 10, 'พฤศจิกายน': 10, 'nov': 10, 'november': 10,
+    'ธ.ค.': 11, 'ธันวาคม': 11, 'dec': 11, 'december': 11
+  };
+
+  for (const [mName, mIdx] of Object.entries(THAI_MONTHS)) {
+    if (normalized.includes(mName)) {
+      const yearMatch = normalized.match(/\b(19\d\d|20\d\d|25\d\d)\b/);
+      const dayMatch = normalized.match(/\b(\d{1,2})\b/);
+
+      if (yearMatch) {
+        let year = parseInt(yearMatch[1], 10);
+        if (year > 2400) year -= 543; // Convert Buddhist Era (พ.ศ.) to Common Era (ค.ศ.)
+        const day = dayMatch ? parseInt(dayMatch[1], 10) : 1;
+        const dateObj = new Date(year, mIdx, day);
+        return now - dateObj.getTime() > ONE_YEAR_MS;
+      }
+    }
+  }
+
+  // Fallback: check 4-digit year
+  const yearOnlyMatch = normalized.match(/\b(19\d\d|20\d\d|25\d\d)\b/);
+  if (yearOnlyMatch) {
+    let year = parseInt(yearOnlyMatch[1], 10);
+    if (year > 2400) year -= 543;
+    const currentYear = new Date().getFullYear();
+    return currentYear - year >= 1;
+  }
+
+  return false;
+};
 
 interface ProfileScreenProps {
   user: UserProfile;
@@ -46,6 +124,68 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const addresses: UserAddress[] = user.addresses || [];
+  const isPrescriptionOutdated = isPrescriptionDateOutdated(user.prescription?.lastChecked);
+
+  // Biometric Authentication (Touch ID / Face ID) State
+  const [biometricConfig, setBiometricConfig] = useState<BiometricAuthConfig | null>(() => {
+    return loadBiometricConfig();
+  });
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+  const [biometricModalMode, setBiometricModalMode] = useState<'enable' | 'test'>('enable');
+  const [showEyeHealthInfo, setShowEyeHealthInfo] = useState(false);
+
+  const isBiometricEnabled = !!biometricConfig?.enabled;
+
+  const handleToggleBiometric = () => {
+    if (isBiometricEnabled) {
+      // Turn off
+      clearBiometricConfig();
+      setBiometricConfig(null);
+    } else {
+      // Turn on: open verification modal to register/verify biometric
+      setBiometricModalMode('enable');
+      setIsBiometricModalOpen(true);
+    }
+  };
+
+  const handleBiometricSuccess = () => {
+    if (biometricModalMode === 'enable') {
+      const isApple = typeof navigator !== 'undefined' && /iPhone|iPad|Macintosh/i.test(navigator.userAgent);
+      const newConfig: BiometricAuthConfig = {
+        enabled: true,
+        userEmail: user.email,
+        userName: user.name,
+        deviceType: isApple ? 'face_id' : 'touch_id',
+        enabledAt: new Date().toLocaleDateString('th-TH', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        session: {
+          token: 'token-' + Date.now(),
+          user: {
+            id: user.id || 1,
+            user_name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            avatar_url: user.avatarUrl,
+            member_tier: user.memberTier || null,
+            member_points: user.points || 0,
+            shipping_address: user.shippingAddress,
+            prescription_od_sphere: user.prescription.od.sphere,
+            prescription_od_cylinder: user.prescription.od.cylinder || null,
+            prescription_os_sphere: user.prescription.os.sphere,
+            prescription_os_cylinder: user.prescription.os.cylinder || null,
+            prescription_last_checked: user.prescription.lastChecked
+          }
+        }
+      };
+      saveBiometricConfig(newConfig);
+      setBiometricConfig(newConfig);
+    }
+    setIsBiometricModalOpen(false);
+  };
 
   const handleOpenAdd = () => {
     setEditingAddress(null);
@@ -113,28 +253,220 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       </div>
 
       {/* Optical Prescription Bento Card */}
-      <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-space-sm border border-outline-variant/15">
+      <div
+        id="profile-prescription-card"
+        className={`rounded-2xl p-space-lg shadow-sm flex flex-col gap-space-sm border transition-all ${
+          isPrescriptionOutdated
+            ? 'bg-gradient-to-b from-amber-500/[0.06] via-surface-container-lowest to-surface-container-lowest border-amber-400 ring-2 ring-amber-400/25 shadow-md'
+            : 'bg-surface-container-lowest border-outline-variant/15'
+        }`}
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[22px]">eyeglasses</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`material-symbols-outlined text-[22px] ${
+                isPrescriptionOutdated ? 'text-amber-600' : 'text-primary'
+              }`}
+            >
+              eyeglasses
+            </span>
             <h3 className="font-bold text-sm text-on-surface">ข้อมูลค่าสายตาของฉัน</h3>
+            {isPrescriptionOutdated && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-900 border border-amber-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                <span>ควรตรวจวัดใหม่</span>
+              </span>
+            )}
           </div>
-          <button
-            onClick={onOpenPrescriptionModal}
-            className="text-xs font-semibold text-primary hover:underline flex items-center gap-0.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">edit</span>
-            แก้ไข
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigate('vision-test')}
+              className="text-xs font-bold px-2.5 py-1 rounded-lg bg-primary text-on-primary shadow-2xs hover:bg-primary-container flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+              title="ตรวจวัดสายตาออนไลน์ (วัดสั้น/ยาว เอียง ตาบอดสี)"
+            >
+              <span className="material-symbols-outlined text-[15px]">visibility</span>
+              <span>ตรวจสายตา</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEyeHealthInfo((prev) => !prev)}
+              className={`text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+                showEyeHealthInfo
+                  ? 'bg-surface-container-highest text-on-surface shadow-2xs'
+                  : 'bg-primary/10 text-primary hover:bg-primary/15'
+              }`}
+              title="ความสำคัญของการตรวจสายตาทุกปีและเกร็ดดูแลสายตา"
+              aria-expanded={showEyeHealthInfo}
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {showEyeHealthInfo ? 'visibility_off' : 'info'}
+              </span>
+              <span>{showEyeHealthInfo ? 'ซ่อนเกร็ด' : 'เกร็ดความรู้'}</span>
+            </button>
+            <button
+              onClick={onOpenPrescriptionModal}
+              className={`text-xs font-semibold hover:underline flex items-center gap-0.5 ${
+                isPrescriptionOutdated ? 'text-amber-700 font-bold' : 'text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">edit</span>
+              แก้ไข
+            </button>
+          </div>
         </div>
+
+        {/* Educational Card: Importance of Annual Eye Check-ups & Health Tips */}
+        {showEyeHealthInfo && (
+          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-primary/25 shadow-xs flex flex-col gap-3 text-xs animate-in fade-in zoom-in-98 duration-200">
+            {/* Header of educational card */}
+            <div className="flex items-start justify-between gap-2 pb-2 border-b border-outline-variant/20">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[18px]">visibility</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs text-on-surface">ทำไมควรตรวจสายตาทุกปี?</h4>
+                  <p className="text-[10px] text-on-surface-variant">Annual Eye Examination & Tips</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEyeHealthInfo(false)}
+                className="w-6 h-6 rounded-full hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors cursor-pointer"
+                aria-label="ปิดคำแนะนำ"
+              >
+                <span className="material-symbols-outlined text-[15px]">close</span>
+              </button>
+            </div>
+
+            {/* Why annual check-ups are essential */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] font-bold text-primary flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">health_and_safety</span>
+                ความสำคัญของการตรวจวัดสายตาทุก 1 ปี
+              </span>
+              <ul className="space-y-1.5 text-[11px] text-on-surface-variant leading-relaxed pl-1">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary font-bold text-xs mt-px">•</span>
+                  <span>
+                    <strong className="text-on-surface">การปรับเปลี่ยนของค่าสายตา:</strong> ค่าสั้น ยาว หรือเอียง มักค่อยๆ เปลี่ยนแปลงโดยไม่รู้ตัว หากฝืนใช้แว่นเดิมอาจทำให้ตาล้า ตาแห้ง และปวดศีรษะเรื้อรัง
+                  </span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary font-bold text-xs mt-px">•</span>
+                  <span>
+                    <strong className="text-on-surface">คัดกรองโรคตาตั้งแต่ระยะเริ่มแรก:</strong> โรคต้อหิน ต้อกระจก หรือความดันลูกตาสูง มักไม่แสดงอาการเตือนในระยะแรก การตรวจประจำปีช่วยป้องกันก่อนสูญเสียการมองเห็น
+                  </span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="text-primary font-bold text-xs mt-px">•</span>
+                  <span>
+                    <strong className="text-on-surface">ปรับความคมชัดตรงไลฟ์สไตล์:</strong> เลนส์และค่า PD (ระยะรูม่านตา) ที่อัปเดต ช่วยให้การทำงานหน้าจอคอมพิวเตอร์และขับขี่ปลอดภัยสูงสุด
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {/* 4 Essential Eye Health Care Tips */}
+            <div className="p-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold text-secondary flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">tips_and_updates</span>
+                เกร็ดความรู้ดูแลสุขภาพดวงตาประจำวัน
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-on-surface-variant">
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-surface-container-low/70">
+                  <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">timer</span>
+                  <div>
+                    <strong className="text-on-surface block text-[10px]">กฎ 20-20-20</strong>
+                    ทุก 20 นาที พักสายตามองไกล 20 ฟุต อย่างน้อย 20 วินาที
+                  </div>
+                </div>
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-surface-container-low/70">
+                  <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">wb_sunny</span>
+                  <div>
+                    <strong className="text-on-surface block text-[10px]">ปกป้องแสง UV & จอภาพ</strong>
+                    สวมเลนส์กันแดด UV400 หรือเลนส์กรองแสงบลูบล็อกเมื่ออยู่หน้าจอ
+                  </div>
+                </div>
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-surface-container-low/70">
+                  <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">water_drop</span>
+                  <div>
+                    <strong className="text-on-surface block text-[10px]">ลดอาการตาแห้ง</strong>
+                    กะพริบตาบ่อยขึ้น หรือใช้น้ำตาเทียมหยอดเมื่อรู้สึกล้า
+                  </div>
+                </div>
+                <div className="flex items-start gap-1.5 p-2 rounded-lg bg-surface-container-low/70">
+                  <span className="material-symbols-outlined text-primary text-[16px] shrink-0 mt-0.5">nutrition</span>
+                  <div>
+                    <strong className="text-on-surface block text-[10px]">อาหารบำรุงจอประสาทตา</strong>
+                    ผักใบเขียว แครอท ปลาทะเล (วิตามิน A, ลูทีน และโอเมก้า 3)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick action button to book eye test at branch */}
+            <button
+              type="button"
+              onClick={() => setIsBranchModalOpen(true)}
+              className="w-full py-2 px-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-2xs active:scale-98 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[15px]">storefront</span>
+              <span>นัดวัดสายตาฟรีที่สาขา TATOE Optical</span>
+            </button>
+          </div>
+        )}
+
+        {/* Suggestion Callout Banner when Prescription is older than 1 year */}
+        {isPrescriptionOutdated && (
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start justify-between gap-2.5 text-xs animate-in fade-in duration-200">
+            <div className="flex items-start gap-2 text-amber-950">
+              <span
+                className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                warning
+              </span>
+              <div>
+                <div className="flex items-center gap-1.5 font-bold text-[11px] text-amber-900 flex-wrap">
+                  <span>ตรวจวัดสายตาล่าสุดเกิน 1 ปีแล้ว</span>
+                  <span className="text-amber-700/80 font-normal">({user.prescription.lastChecked})</span>
+                </div>
+                <p className="text-[10px] text-amber-800/90 mt-0.5 leading-relaxed">
+                  ค่าสายตาอาจมีการเปลี่ยนแปลงตามธรรมชาติ แนะนำให้อัปเดตข้อมูลค่าสายตาล่าสุดเพื่อความคมชัดและสบายตาสูงสุด
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenPrescriptionModal}
+              className="shrink-0 px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[13px]">refresh</span>
+              <span>อัปเดต</span>
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2.5 pt-1">
           {/* OD Card */}
-          <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col">
-            <span className="text-xs font-bold text-primary flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-primary"></span>
-              OD (ตาขวา)
-            </span>
+          <div
+            className={`p-3 rounded-xl border flex flex-col transition-colors ${
+              isPrescriptionOutdated
+                ? 'bg-amber-500/[0.04] border-amber-400/30'
+                : 'bg-surface-container-low border-outline-variant/30'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-primary flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-primary"></span>
+                OD (ตาขวา)
+              </span>
+              {user.prescription.od.visualAcuity && (
+                <span className="text-[10px] font-mono text-outline">{user.prescription.od.visualAcuity}</span>
+              )}
+            </div>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-[10px] text-on-surface-variant">SPH:</span>
               <span className="font-mono font-bold text-sm text-on-surface">
@@ -147,14 +479,33 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 {user.prescription.od.cylinder || '0.00'}
               </span>
             </div>
+            {user.prescription.od.axis && (
+              <div className="flex items-baseline gap-1">
+                <span className="text-[10px] text-on-surface-variant">AXIS:</span>
+                <span className="font-mono font-bold text-xs text-secondary">
+                  {user.prescription.od.axis}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* OS Card */}
-          <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col">
-            <span className="text-xs font-bold text-secondary flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-secondary"></span>
-              OS (ตาซ้าย)
-            </span>
+          <div
+            className={`p-3 rounded-xl border flex flex-col transition-colors ${
+              isPrescriptionOutdated
+                ? 'bg-amber-500/[0.04] border-amber-400/30'
+                : 'bg-surface-container-low border-outline-variant/30'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-secondary flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-secondary"></span>
+                OS (ตาซ้าย)
+              </span>
+              {user.prescription.os.visualAcuity && (
+                <span className="text-[10px] font-mono text-outline">{user.prescription.os.visualAcuity}</span>
+              )}
+            </div>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-[10px] text-on-surface-variant">SPH:</span>
               <span className="font-mono font-bold text-sm text-on-surface">
@@ -167,13 +518,59 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 {user.prescription.os.cylinder || '0.00'}
               </span>
             </div>
+            {user.prescription.os.axis && (
+              <div className="flex items-baseline gap-1">
+                <span className="text-[10px] text-on-surface-variant">AXIS:</span>
+                <span className="font-mono font-bold text-xs text-secondary">
+                  {user.prescription.os.axis}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Color Vision Status Row if available */}
+        {user.prescription.colorVisionStatus && (
+          <div className="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-secondary">palette</span>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-on-surface">ผลการตรวจตาบอดสี (Ishihara)</span>
+                <span className="text-[10px] text-on-surface-variant">
+                  {user.prescription.colorVisionStatus === 'normal'
+                    ? 'การมองเห็นสีปกติ (Normal Color Vision)'
+                    : 'พบความบกพร่องการแยกสี แดง-เขียว'}
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-surface-container-lowest text-primary border border-outline-variant/30">
+              {user.prescription.colorVisionScore || '8/8'}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-[11px] text-on-surface-variant pt-1 px-1">
           <span>ระยะห่างรูม่านตา (PD): 62 mm</span>
-          <span className="text-secondary font-medium">{user.prescription.lastChecked}</span>
+          {isPrescriptionOutdated ? (
+            <span className="text-amber-800 font-bold flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+              <span className="material-symbols-outlined text-[14px] text-amber-600">history_toggle_off</span>
+              <span>ตรวจเมื่อ: {user.prescription.lastChecked} (เกิน 1 ปี)</span>
+            </span>
+          ) : (
+            <span className="text-secondary font-medium">ตรวจเมื่อ: {user.prescription.lastChecked}</span>
+          )}
         </div>
+
+        {/* Action button to open online vision test */}
+        <button
+          type="button"
+          onClick={() => onNavigate('vision-test')}
+          className="w-full py-2.5 px-3 rounded-xl bg-surface-container-low hover:bg-surface-container border border-primary/25 text-primary font-bold text-xs flex items-center justify-center gap-1.5 active:scale-98 transition-all cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[16px]">visibility</span>
+          <span>ตรวจวัดสายตาออนไลน์ (มีวัดสายตาเอียงและตรวจตาบอดสี)</span>
+          <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+        </button>
       </div>
 
       {/* Shipping Address Card (Multi-Address Management) */}
@@ -468,6 +865,101 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </button>
       </div>
 
+      {/* Biometric Authentication (Touch ID / Face ID) Card */}
+      <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-3.5 border border-outline-variant/15">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-2xs ${
+                isBiometricEnabled
+                  ? 'bg-primary text-on-primary'
+                  : 'bg-surface-container-high text-on-surface-variant'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[24px]">
+                {biometricConfig?.deviceType === 'touch_id' ? 'fingerprint' : 'face'}
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm text-on-surface">เข้าสู่ระบบด้วย Touch ID / Face ID</h3>
+                {isBiometricEnabled && (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 border border-emerald-500/25 text-[10px] font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                    เปิดใช้งานแล้ว
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">
+                สแกนใบหน้าหรือลายนิ้วมือเพื่อเข้าใช้งานได้ทันทีอย่างรวดเร็วและปลอดภัย โดยไม่ต้องพิมพ์อีเมลและรหัสผ่านซ้ำ
+              </p>
+            </div>
+          </div>
+
+          {/* Biometric Toggle Switch */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isBiometricEnabled}
+            onClick={handleToggleBiometric}
+            className={`w-12 h-7 rounded-full p-1 transition-colors duration-200 ease-in-out shrink-0 relative focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer ${
+              isBiometricEnabled ? 'bg-primary' : 'bg-surface-container-highest'
+            }`}
+            title={isBiometricEnabled ? 'ปิดการใช้งานชีวมิติ' : 'เปิดใช้งานชีวมิติ'}
+          >
+            <span
+              className={`block w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                isBiometricEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Status & Capabilities Details */}
+        <div className="pt-2 border-t border-outline-variant/15 flex flex-col gap-2">
+          <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-on-surface-variant">
+              <span className="material-symbols-outlined text-[15px] text-emerald-600">verified_user</span>
+              <span>
+                {isBiometricEnabled
+                  ? `ผูกกับบัญชี ${user.email} (${biometricConfig?.enabledAt || 'ใช้งานได้'})`
+                  : 'ยังไม่ได้เปิดใช้งานชีวมิติบนอุปกรณ์นี้'}
+              </span>
+            </div>
+
+            {isBiometricEnabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBiometricModalMode('test');
+                  setIsBiometricModalOpen(true);
+                }}
+                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer active:scale-95 transition-transform"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                <span>ทดสอบสแกน</span>
+              </button>
+            )}
+          </div>
+
+          {/* Device Hardware Support Chips */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+            <span className="px-2 py-0.5 rounded-lg bg-surface-container-low text-[10px] text-on-surface-variant border border-outline-variant/20 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">face</span>
+              Face ID
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-surface-container-low text-[10px] text-on-surface-variant border border-outline-variant/20 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">fingerprint</span>
+              Touch ID
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-surface-container-low text-[10px] text-on-surface-variant border border-outline-variant/20 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">laptop_mac</span>
+              Windows Hello / Android
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Role & Permissions Card */}
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-sm flex flex-col gap-3 border border-outline-variant/15">
         <div className="flex items-center justify-between">
@@ -579,6 +1071,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         onClose={() => setIsMemberBenefitsModalOpen(false)}
         user={user}
         onNavigate={(screen) => onNavigate(screen as ScreenId)}
+      />
+
+      {/* Biometric Verification Modal */}
+      <BiometricVerificationModal
+        isOpen={isBiometricModalOpen}
+        onClose={() => setIsBiometricModalOpen(false)}
+        onSuccess={handleBiometricSuccess}
+        mode={biometricModalMode}
+        userName={user.name}
+        userEmail={user.email}
       />
     </div>
   );

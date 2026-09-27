@@ -1,36 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { UserProfile, ScreenId, DeliveryOrder, DeliveryStage } from '../types';
+import React, { useState } from 'react';
+import { UserProfile, ScreenId, DeliveryOrder } from '../types';
 import { INITIAL_DELIVERY_ORDER, DELIVERY_STAGE_CONFIG } from '../data/mockData';
 
 interface OrdersScreenProps {
   user: UserProfile;
   deliveryOrder?: DeliveryOrder;
-  onUpdateDeliveryStage?: (stage: DeliveryStage) => void;
   onOpenReceipt: () => void;
   onOpenChat: () => void;
   onNavigate: (screen: ScreenId) => void;
 }
 
-const STAGES_ORDER: DeliveryStage[] = [
-  'order_placed',
-  'crafting',
-  'in_transit',
-  'at_sorting_hub',
-  'out_for_delivery',
-  'delivered'
-];
-
 export const OrdersScreen: React.FC<OrdersScreenProps> = ({
   user,
   deliveryOrder = INITIAL_DELIVERY_ORDER,
-  onUpdateDeliveryStage,
   onOpenReceipt,
   onOpenChat,
   onNavigate
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'transit' | 'completed'>('transit');
   const [copiedTracking, setCopiedTracking] = useState(false);
-  const [isAutoSimulating, setIsAutoSimulating] = useState(false);
 
   const currentStage = deliveryOrder.currentStage || 'in_transit';
   const stageConfig = DELIVERY_STAGE_CONFIG[currentStage] || DELIVERY_STAGE_CONFIG.in_transit;
@@ -44,124 +32,8 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
     }, 2000);
   };
 
-  const handleSelectStage = (newStage: DeliveryStage) => {
-    if (onUpdateDeliveryStage) {
-      onUpdateDeliveryStage(newStage);
-    }
-  };
-
-  const handleNextStage = () => {
-    const currentIndex = STAGES_ORDER.indexOf(currentStage);
-    const nextIndex = (currentIndex + 1) % STAGES_ORDER.length;
-    handleSelectStage(STAGES_ORDER[nextIndex]);
-  };
-
-  // Auto-simulation timer loop
-  useEffect(() => {
-    if (!isAutoSimulating) return;
-
-    const interval = setInterval(() => {
-      const currentIndex = STAGES_ORDER.indexOf(currentStage);
-      if (currentIndex < STAGES_ORDER.length - 1) {
-        handleSelectStage(STAGES_ORDER[currentIndex + 1]);
-      } else {
-        setIsAutoSimulating(false);
-      }
-    }, 4500);
-
-    return () => clearInterval(interval);
-  }, [isAutoSimulating, currentStage]);
-
   return (
     <div className="flex flex-col w-full pb-24 gap-space-md">
-      {/* Simulation Controller Banner */}
-      <div className="bg-gradient-to-r from-primary/10 via-surface-container-low to-secondary/10 rounded-2xl p-3.5 border border-primary/25 shadow-xs flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary text-on-primary flex items-center justify-center text-xs shadow-2xs">
-              <span className="material-symbols-outlined text-[17px] animate-pulse">
-                notifications_active
-              </span>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-xs text-on-surface">
-                  จำลองสถานะพัสดุ (Push Notification)
-                </h3>
-                <span className="px-1.5 py-0.2 rounded bg-primary text-on-primary text-[9px] font-bold">
-                  Interactive
-                </span>
-              </div>
-              <p className="text-[10px] text-on-surface-variant">
-                คลิกเปลี่ยนสถานะเพื่อดู Push Notification เด้งแจ้งเตือนแบบเรียลไทม์
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleNextStage}
-            className="px-2.5 py-1 rounded-xl bg-primary text-on-primary text-[11px] font-bold flex items-center gap-1 hover:bg-primary-container active:scale-95 shadow-2xs transition-all"
-            title="ขยับไปยังสถานะถัดไป"
-          >
-            <span>ขั้นถัดไป</span>
-            <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-          </button>
-        </div>
-
-        {/* Quick Selection Buttons for Delivery Stages */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          {STAGES_ORDER.map((stageKey, idx) => {
-            const cfg = DELIVERY_STAGE_CONFIG[stageKey];
-            const isSelected = currentStage === stageKey;
-            const isTargetHighlight = stageKey === 'at_sorting_hub';
-
-            return (
-              <button
-                key={stageKey}
-                type="button"
-                onClick={() => handleSelectStage(stageKey)}
-                className={`shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
-                  isSelected
-                    ? 'bg-primary text-on-primary shadow-xs ring-2 ring-primary/30'
-                    : isTargetHighlight
-                    ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 hover:bg-emerald-500/25'
-                    : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-                }`}
-              >
-                <span>{idx + 1}.</span>
-                <span>{cfg.label}</span>
-                {isTargetHighlight && !isSelected && (
-                  <span className="px-1 rounded bg-emerald-600 text-white text-[9px]">แนะนำ</span>
-                )}
-                {isSelected && <span>✓</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Auto Simulator Button */}
-        <div className="flex items-center justify-between pt-1 border-t border-outline-variant/15 text-[10px]">
-          <span className="text-on-surface-variant">
-            สถานะปัจจุบัน: <strong className="text-primary">{stageConfig.label}</strong>
-          </span>
-          <button
-            type="button"
-            onClick={() => setIsAutoSimulating(!isAutoSimulating)}
-            className={`font-semibold flex items-center gap-1 px-2 py-0.5 rounded-lg transition-colors ${
-              isAutoSimulating
-                ? 'bg-red-500/10 text-red-600 animate-pulse'
-                : 'text-primary hover:bg-primary/10'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[13px]">
-              {isAutoSimulating ? 'stop_circle' : 'play_circle'}
-            </span>
-            <span>{isAutoSimulating ? 'หยุดจำลองอัตโนมัติ' : 'เล่นจำลองทุก 4 วินาที'}</span>
-          </button>
-        </div>
-      </div>
-
       {/* Order Tracking Status Navigation Tabs */}
       <div className="flex items-center gap-space-xs overflow-x-auto no-scrollbar py-1">
         <button
@@ -322,35 +194,23 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
         <div className="pt-3 border-t border-outline-variant/15 flex flex-col gap-2">
           <span className="font-bold text-xs text-on-surface">สินค้าในกล่องพัสดุนี้ (2 ชิ้น)</span>
           <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-container-low">
-            <div className="w-12 h-12 rounded-lg bg-surface-container-lowest p-1 flex items-center justify-center shrink-0">
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuD34F18cWkMwhn58xL3FpG9uG9mZqK816_x2qE4ErhE7YgI0x29kZ5g8h1Zqj_8o20y8qU=w300"
-                alt="Urban Black"
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <div className="w-12 h-12 rounded-lg bg-surface-container-lowest p-1 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-outline">inventory_2</span></div>
             <div className="flex-1 min-w-0 text-xs">
-              <p className="font-bold text-on-surface truncate">Big Eye Urban Black</p>
-              <p className="text-[10px] text-on-surface-variant">สีกรอบ Matte Black • เลนส์ Auto Blue</p>
-              <p className="text-[10px] text-primary font-semibold">ค่าสายตา R: -1.75 | L: -2.00</p>
+              <p className="font-bold text-on-surface truncate">สินค้าในคำสั่งซื้อ</p>
+              <p className="text-[10px] text-on-surface-variant">รายละเอียดจาก SQL</p>
+              <p className="text-[10px] text-primary font-semibold">รายละเอียดเลนส์จาก SQL</p>
             </div>
-            <span className="font-bold text-xs text-on-surface shrink-0">฿1,290</span>
+            <span className="font-bold text-xs text-on-surface shrink-0">฿—</span>
           </div>
 
           <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-container-low">
-            <div className="w-12 h-12 rounded-lg bg-surface-container-lowest p-1 flex items-center justify-center shrink-0">
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCL3Jj59yE9L8mF2b8y24_G8c9K100Zk19y8U1_ErhG78yG_x34kL5g7h1Zqj_8o20y8qU=w300"
-                alt="Classic 01"
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <div className="w-12 h-12 rounded-lg bg-surface-container-lowest p-1 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-outline">inventory_2</span></div>
             <div className="flex-1 min-w-0 text-xs">
-              <p className="font-bold text-on-surface truncate">Big Eye Classic 01</p>
-              <p className="text-[10px] text-on-surface-variant">สีกรอบ Tortoise Gold • เลนส์มัลติโค้ต</p>
-              <p className="text-[10px] text-on-surface-variant">ไม่มีค่าสายตา</p>
+              <p className="font-bold text-on-surface truncate">สินค้าในคำสั่งซื้อ</p>
+              <p className="text-[10px] text-on-surface-variant">รายละเอียดจาก SQL</p>
+              <p className="text-[10px] text-on-surface-variant">รายละเอียดเลนส์จาก SQL</p>
             </div>
-            <span className="font-bold text-xs text-on-surface shrink-0">฿990</span>
+            <span className="font-bold text-xs text-on-surface shrink-0">฿—</span>
           </div>
         </div>
 
@@ -390,7 +250,7 @@ export const OrdersScreen: React.FC<OrdersScreenProps> = ({
           </span>
         </div>
         <p className="text-[11px] text-on-surface-variant">
-          Big Eye Minimalist Silver • เลนส์ใสธรรมดา • ฿1,190
+          สินค้าในคำสั่งซื้อ • รายละเอียดจาก SQL
         </p>
         <div className="flex justify-end">
           <button

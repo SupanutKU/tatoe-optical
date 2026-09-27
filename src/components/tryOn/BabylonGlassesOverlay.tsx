@@ -11,7 +11,7 @@ import type { FaceMetrics } from '../../lib/faceGeometry';
  */
 interface BabylonGlassesOverlayProps {
   metrics: FaceMetrics | null;
-  product: Product;
+  product?: Product;
   mirrored?: boolean;
   videoSize: { width: number; height: number };
 }
@@ -70,6 +70,7 @@ export const BabylonGlassesOverlay: React.FC<BabylonGlassesOverlayProps> = ({ me
   const groupRef = useRef<any>(null);
   const productIdRef = useRef<string | null>(null);
   const [babylonReady, setBabylonReady] = useState(false);
+
   const sizeRef = useRef({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -118,14 +119,16 @@ export const BabylonGlassesOverlay: React.FC<BabylonGlassesOverlayProps> = ({ me
           camera.orthoTop = rect.height / 2;
           camera.orthoBottom = -rect.height / 2;
         });
-        resizeObserver.observe(canvas.parentElement);
-        const initialRect = canvas.parentElement.getBoundingClientRect();
-        sizeRef.current = { width: initialRect.width, height: initialRect.height };
-        engine.resize();
-        camera.orthoLeft = -initialRect.width / 2;
-        camera.orthoRight = initialRect.width / 2;
-        camera.orthoTop = initialRect.height / 2;
-        camera.orthoBottom = -initialRect.height / 2;
+        if (canvas.parentElement) {
+          resizeObserver.observe(canvas.parentElement);
+          const initialRect = canvas.parentElement.getBoundingClientRect();
+          sizeRef.current = { width: initialRect.width, height: initialRect.height };
+          engine.resize();
+          camera.orthoLeft = -initialRect.width / 2;
+          camera.orthoRight = initialRect.width / 2;
+          camera.orthoTop = initialRect.height / 2;
+          camera.orthoBottom = -initialRect.height / 2;
+        }
 
         engine.runRenderLoop(() => scene.render());
         setBabylonReady(true);
@@ -150,6 +153,7 @@ export const BabylonGlassesOverlay: React.FC<BabylonGlassesOverlayProps> = ({ me
 
   // Rebuild the small parametric model only when the selected product changes.
   useEffect(() => {
+    if (!product) return;
     const B = window.BABYLON;
     const scene = sceneRef.current;
     const root = groupRef.current;
@@ -291,7 +295,9 @@ export const BabylonGlassesOverlay: React.FC<BabylonGlassesOverlayProps> = ({ me
     root.rotation.y = yaw * 0.9;
     root.rotation.z = (mirrored ? -metrics.rollDeg : metrics.rollDeg) * Math.PI / 180;
     root.rotation.x = yaw * 0.12;
-  }, [metrics, mirrored, videoSize]);
+  }, [metrics, mirrored, videoSize, product]);
+
+  if (!product) return null;
 
   return (
     <canvas

@@ -7,6 +7,7 @@ export type ScreenId =
   | 'orders'
   | 'profile'
   | 'claims'
+  | 'vision-test'
   | 'welcome'
   | 'login'
   | 'register'
@@ -64,14 +65,21 @@ export interface Prescription {
     sphere: string;
     cylinder?: string;
     axis?: string;
+    visualAcuity?: string;
   };
   os: {
     sphere: string;
     cylinder?: string;
     axis?: string;
+    visualAcuity?: string;
   };
   lastChecked: string;
+  colorVisionStatus?: 'normal' | 'red_green_mild' | 'red_green_moderate' | 'blue_yellow' | 'total_deficiency';
+  colorVisionScore?: string;
+  testedOnline?: boolean;
 }
+
+export * from './types/visionTest';
 
 export type AddressType = 'home' | 'office' | 'other';
 

@@ -98,24 +98,24 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
             <div className="flex justify-between items-start py-1">
               <div className="flex-1 pr-2">
-                <p className="font-semibold text-on-surface">1. Big Eye Urban Black (Titanium Edition)</p>
+                <p className="font-semibold text-on-surface">1. สินค้าในคำสั่งซื้อ</p>
                 <p className="text-[10px] text-on-surface-variant">
-                  สีกรอบ: Matte Black • เลนส์ Auto Blue 1.60 (ตัดแสงฟ้า 99%)
+                  รายละเอียดสินค้าและเลนส์จาก SQL
                 </p>
-                <p className="text-[10px] text-primary">ค่าสายตา R: -1.75 | L: -2.00</p>
+                <p className="text-[10px] text-primary">รายละเอียดค่าสายตาจาก SQL</p>
               </div>
-              <span className="font-semibold text-on-surface">฿1,290</span>
+              <span className="font-semibold text-on-surface">฿—</span>
             </div>
 
             <div className="flex justify-between items-start py-1 border-t border-outline-variant/20">
               <div className="flex-1 pr-2">
-                <p className="font-semibold text-on-surface">2. Big Eye Classic 01 (Multi-Coat)</p>
+                <p className="font-semibold text-on-surface">2. สินค้าในคำสั่งซื้อ</p>
                 <p className="text-[10px] text-on-surface-variant">
-                  สีกรอบ: Tortoise Gold • เลนส์ใสตัดแสงสะท้อน
+                  รายละเอียดสินค้าและเลนส์จาก SQL
                 </p>
-                <p className="text-[10px] text-on-surface-variant">ไม่มีค่าสายตา (เลนส์แฟชั่น)</p>
+                <p className="text-[10px] text-on-surface-variant">รายละเอียดค่าสายตาจาก SQL</p>
               </div>
-              <span className="font-semibold text-on-surface">฿990</span>
+              <span className="font-semibold text-on-surface">฿—</span>
             </div>
           </div>
 

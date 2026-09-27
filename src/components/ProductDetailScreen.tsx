@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Product, ProductReview, UserProfile } from '../types';
+import { Product, ProductReview, UserProfile, ScreenId } from '../types';
 import { ProductReviewsSection } from './ProductReviewsSection';
+import { isProductLowStock } from './LowStockBadge';
 
 interface ProductDetailScreenProps {
   product: Product;
@@ -14,6 +15,7 @@ interface ProductDetailScreenProps {
   onEditProduct?: (product: Product) => void;
   onDeleteProduct?: (productId: string) => void;
   onAddReview?: (review: Omit<ProductReview, 'id' | 'date'>) => void;
+  onNavigate?: (screen: ScreenId) => void;
 }
 
 export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
@@ -27,7 +29,8 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   onOpenChat,
   onEditProduct,
   onDeleteProduct,
-  onAddReview
+  onAddReview,
+  onNavigate
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -83,18 +86,38 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
           ))}
         </div>
 
-        {/* Floating Badges Top Left */}
-        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
+        {/* Floating Badges & Back Button Top Left */}
+        <div className="absolute top-3 left-3 flex items-center flex-wrap gap-1.5 z-10">
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('home')}
+              className="w-8 h-8 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-on-surface hover:text-primary flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
+              title="ย้อนกลับ"
+              aria-label="ย้อนกลับ"
+            >
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+            </button>
+          )}
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary text-on-primary text-[11px] font-semibold shadow-sm">
             <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               local_fire_department
             </span>
             รุ่นยอดนิยม
           </span>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[11px] font-semibold shadow-sm">
-            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-            สินค้าพร้อมส่ง
-          </span>
+          {isProductLowStock(product.stockStatus, product.stockCount) ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-rose-600 to-amber-600 text-white text-[11px] font-bold shadow-md ring-1 ring-white/30 animate-pulse">
+              <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                local_fire_department
+              </span>
+              ใกล้หมด! เหลือเพียง {product.stockCount || 3} ชิ้น
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[11px] font-semibold shadow-sm">
+              <span className="material-symbols-outlined text-[14px]">check_circle</span>
+              สินค้าพร้อมส่ง
+            </span>
+          )}
         </div>
 
         {/* Carousel Indicator Overlay Bottom */}
@@ -204,6 +227,30 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
             </span>
           )}
         </div>
+
+        {/* Low Stock Urgency Banner */}
+        {isProductLowStock(product.stockStatus, product.stockCount) && (
+          <div className="mt-2.5 p-2.5 rounded-xl bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-200/80 flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  local_fire_department
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-rose-800">
+                  สินค้าใกล้หมดสต็อก! เหลือเพียง {product.stockCount || 3} ชิ้นสุดท้าย
+                </span>
+                <span className="text-[10px] text-rose-700/80">
+                  มีผู้สนใจสั่งซื้อรุ่นนี้บ่อย แนะนำให้สั่งซื้อก่อนสินค้าหมด
+                </span>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-black shrink-0 animate-pulse">
+              HOT
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Micro Benefit Pills */}

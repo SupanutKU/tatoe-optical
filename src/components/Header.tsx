@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   unreadNotificationCount = 0
 }) => {
   // Sub-pages with Back Arrow
-  if (currentScreen === 'detail' || currentScreen === 'checkout') {
+  if (currentScreen === 'detail' || currentScreen === 'checkout' || currentScreen === 'vision-test') {
     return (
       <header className="fixed top-0 w-full z-40 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-safe">
         <div className="max-w-[430px] mx-auto px-space-sm h-14 flex items-center justify-between">
@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="material-symbols-outlined text-[24px]">arrow_back</span>
             </button>
             <h1 className="font-bold text-headline-sm text-on-surface">
-              {title || (currentScreen === 'detail' ? 'Product Detail' : 'Checkout')}
+              {title || (currentScreen === 'detail' ? 'Product Detail' : currentScreen === 'checkout' ? 'Checkout' : 'ตรวจวัดสายตาออนไลน์')}
             </h1>
           </div>
           <div className="flex items-center gap-space-xs pr-space-xs">

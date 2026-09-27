@@ -932,7 +932,7 @@ export const ClaimScreen: React.FC<ClaimScreenProps> = ({
                   type="text"
                   value={productModel}
                   onChange={(e) => setProductModel(e.target.value)}
-                  placeholder="เช่น Big Eye Urban Black หรือ #BEY-2025058"
+                  placeholder="เช่น ชื่อสินค้า หรือ #ORDER-ID"
                   className="w-full py-2.5 pl-9 pr-3 rounded-xl bg-surface-container border border-outline-variant/25 text-xs font-medium text-on-surface placeholder:text-outline focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                 />
               </div>

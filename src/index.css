@@ -113,3 +113,44 @@
 .pb-space-lg { padding-bottom: 1rem; }
 .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Subtle native screen slide-in transition animations */
+@keyframes screenSlideInForward {
+  from {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes screenSlideInBack {
+  from {
+    opacity: 0;
+    transform: translate3d(-20px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-screen-slide-forward {
+  animation: screenSlideInForward 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-screen-slide-back {
+  animation: screenSlideInBack 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-screen-slide-forward,
+  .animate-screen-slide-back {
+    animation: none !important;
+    transform: none !important;
+  }
+}

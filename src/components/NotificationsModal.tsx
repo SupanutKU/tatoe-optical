@@ -8,7 +8,6 @@ interface NotificationsModalProps {
   notifications: AppNotification[];
   onMarkAllAsRead: () => void;
   onSelectNotification: (notification: AppNotification) => void;
-  onTriggerTestStage?: (stage: DeliveryStage) => void;
 }
 
 export const NotificationsModal: React.FC<NotificationsModalProps> = ({
@@ -16,8 +15,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   onClose,
   notifications,
   onMarkAllAsRead,
-  onSelectNotification,
-  onTriggerTestStage
+  onSelectNotification
 }) => {
   if (!isOpen) return null;
 
@@ -75,44 +73,6 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Quick Simulator Bar inside Notifications Modal */}
-        {onTriggerTestStage && (
-          <div className="p-3 bg-surface-container-low/70 border-b border-outline-variant/10 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-primary flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">bolt</span>
-                ทดสอบส่ง Push Notification จำลอง
-              </span>
-              <span className="text-[10px] text-outline">คลิกเพื่อลองสถานะ</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  onTriggerTestStage('at_sorting_hub');
-                  onClose();
-                }}
-                className="py-1.5 px-2 rounded-xl bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/20 text-[11px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 border border-emerald-500/20"
-              >
-                <span>📍</span>
-                <span>ถึงสาขาปลายทางแล้ว</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onTriggerTestStage('out_for_delivery');
-                  onClose();
-                }}
-                className="py-1.5 px-2 rounded-xl bg-orange-500/10 text-orange-900 hover:bg-orange-500/20 text-[11px] font-bold flex items-center justify-center gap-1 transition-all active:scale-95 border border-orange-500/20"
-              >
-                <span>🛵</span>
-                <span>พนักงานกำลังนำจ่าย</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Notification List */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
+import { LowStockBadge, isProductLowStock } from './LowStockBadge';
 
 interface AIRecommendationSectionProps {
   products: Product[];
@@ -12,7 +13,6 @@ interface AIRecommendationSectionProps {
   onAddToCart: (product: Product) => void;
   onOpenVirtualTryOnWithProduct?: (product: Product) => void;
   onResetShapeHistory?: () => void;
-  onSimulateClickShape?: (shape: string) => void;
 }
 
 // Shape metadata for rich optical advice
@@ -69,8 +69,7 @@ export const AIRecommendationSection: React.FC<AIRecommendationSectionProps> = (
   onSelectProduct,
   onAddToCart,
   onOpenVirtualTryOnWithProduct,
-  onResetShapeHistory,
-  onSimulateClickShape
+  onResetShapeHistory
 }) => {
   // Find the shape with the highest clicks
   const sortedShapes = Object.entries(viewedShapes).sort((a, b) => b[1] - a[1]);
@@ -306,6 +305,14 @@ export const AIRecommendationSection: React.FC<AIRecommendationSectionProps> = (
 
                 {/* Product Image */}
                 <div className="relative w-full aspect-square bg-surface-container-low rounded-xl mb-2.5 flex items-center justify-center p-2.5 overflow-hidden">
+                  {isProductLowStock(item.stockStatus, item.stockCount) && (
+                    <LowStockBadge
+                      stockStatus={item.stockStatus}
+                      stockCount={item.stockCount}
+                      variant="compact"
+                      className="absolute top-1.5 left-1.5 z-10"
+                    />
+                  )}
                   <img
                     src={item.images[0]}
                     alt={item.name}
@@ -451,16 +458,6 @@ export const AIRecommendationSection: React.FC<AIRecommendationSectionProps> = (
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-primary">{count} ครั้ง</span>
-                      {onSimulateClickShape && (
-                        <button
-                          type="button"
-                          onClick={() => onSimulateClickShape(shapeKey)}
-                          className="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10px] hover:bg-primary/20 active:scale-95"
-                          title="จำลองการคลิกดูทรงนี้"
-                        >
-                          + เพิ่ม 1 คลิก
-                        </button>
-                      )}
                     </div>
                   </div>
                 );

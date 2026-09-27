@@ -9,32 +9,7 @@ interface AdminProductModalProps {
   onDelete?: (productId: string) => void;
 }
 
-const PRESET_IMAGES = [
-  {
-    label: 'Urban Black',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZMBqH7_MCWY1cBhlruy859V0cxY-NxSQUxCG4zmhZafutZ28DzT077CdnA1wp1WD-ExOa29UHOjFnOqLZlTEO_p-5SkNIfoNo4It2cze4a4yE5RQnz6XMQfglI8V1VIANCK_-GY6cHv7hmrt_7v1DMt767zG2xO0OUXG4F8S4YnoTiTXv_BYkka0zl0dDFZLzvhxA6nORP00LLfFvlhWKTbNa8kGEpaq0Jv8VrgyCp8iOzL1suXWc'
-  },
-  {
-    label: 'Classic Tortoise',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC9HNbXRFZuqswBX2QX48TXQIqhDPMffK3LJpqoN0ShL2kB0uihjxU_JJ7bYxuP707KoBl2vBl6vIRkjxGYH6W4L0H9sHR_Eji3NwtLztxZpVp-d34ENg3N7kUwB3Jy4FudXqNTErJR8ZtIvGADkiP4KYGBjeYdQl86KtlTSBmOA0JVnqEaGavlFdKCi7d7k677k_eboPAMe6z6m7S_u4G_FmM_KffPP4grg-6Hxrl67ZZZuXtkhsYd'
-  },
-  {
-    label: 'Blue Light Clear',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBf9W5H7aMvErlMvK4jL13x2aZ5h8o20y8qU91_ErhG78yG_x34kL5g7h1Zqj_8o20y8qU=w300'
-  },
-  {
-    label: 'Sun Pro Dark',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCL3Jj59yE9L8mF2b8y24_G8c9K100Zk19y8U1_ErhG78yG_x34kL5g7h1Zqj_8o20y8qU=w300'
-  },
-  {
-    label: 'Minimalist Silver',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQb321_E5x2Y8L9K00z19y8U1_ErhG78yG_x34kL5g7h1Zqj_8o20y8qU9kZ5g8h1Zqj=w300'
-  },
-  {
-    label: 'Retro Amber',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAIaiYIJW70zu6ufptXQ1BlKO7bgzb4GJD2OjUK4ZOlj9TozLwa-u64JwEuHy2i7QAPyDrxG3Amed5LrYj1XB3T1Ltew_ZUBJdn5SDwwZZlXJ5kCvuwZ43lpDAOA6ZVlQ-7oH-Xy4LOzUG7oPXrPmXmg6W-CEgO8_dKMOmsgrbtJxZJ6kwp9v73n7X05RdDRGBYEM5BmRGc8EcFXQ1Xvy4NYuSlOJwl8rb_UyyrjYvdmu75pGW0w1QE'
-  }
-];
+const PRESET_IMAGES: { label: string; url: string }[] = [];
 
 export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   isOpen,
@@ -47,8 +22,8 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState('');
   const [colorName, setColorName] = useState('');
-  const [price, setPrice] = useState('1290');
-  const [originalPrice, setOriginalPrice] = useState('1890');
+  const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
   const [category, setCategory] = useState<'prescription' | 'sunglasses' | 'blue-light' | 'sports'>('prescription');
   const [shape, setShape] = useState<'round' | 'square' | 'drop' | 'cat-eye'>('square');
   const [material, setMaterial] = useState<'titanium' | 'acetate' | 'tr90' | 'metal'>('titanium');
@@ -58,7 +33,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   const [tag, setTag] = useState('Ultra Light');
   const [badge, setBadge] = useState<'Best Seller' | 'New' | ''>('New');
   const [stockStatus, setStockStatus] = useState<'in_stock' | 'low_stock' | 'out_of_stock'>('in_stock');
-  const [imageUrl, setImageUrl] = useState(PRESET_IMAGES[0].url);
+  const [imageUrl, setImageUrl] = useState('');
   const [imageInputMode, setImageInputMode] = useState<'url' | 'upload' | 'preset'>('url');
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [description, setDescription] = useState('');
@@ -80,7 +55,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       setTag(productToEdit.tag || '');
       setBadge(productToEdit.badge || '');
       setStockStatus(productToEdit.stockStatus);
-      const initialImg = productToEdit.images[0] || PRESET_IMAGES[0].url;
+      const initialImg = productToEdit.images[0] || '';
       setImageUrl(initialImg);
       if (initialImg.startsWith('data:')) {
         setImageInputMode('upload');
@@ -97,7 +72,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       setName('');
       setSubtitle('(รุ่นใหม่ 2025)');
       setColorName('ดำด้าน Matte Black');
-      setPrice('1290');
+      setPrice('');
       setOriginalPrice('1890');
       setCategory('prescription');
       setShape('square');
@@ -108,7 +83,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       setTag('Ultra Light');
       setBadge('New');
       setStockStatus('in_stock');
-      setImageUrl(PRESET_IMAGES[0].url);
+      setImageUrl('');
       setImageInputMode('url');
       setCustomUrlInput('');
       setDescription('กรอบแว่นตาน้ำหนักเบาพิเศษ ผลิตจากวัสดุพรีเมียม ใส่สบายตลอดวัน');
@@ -142,7 +117,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
     }
     setFormError(null);
 
-    const numPrice = parseFloat(price) || 990;
+    const numPrice = parseFloat(price) || 0;
     const numOriginal = originalPrice ? parseFloat(originalPrice) : undefined;
     const discountPct = numOriginal && numOriginal > numPrice
       ? Math.round(((numOriginal - numPrice) / numOriginal) * 100)
@@ -165,8 +140,8 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       tag: tag.trim() || undefined,
       badge: (badge as 'Best Seller' | 'New') || undefined,
       stockStatus,
-      images: [imageUrl, imageUrl, imageUrl],
-      description: description.trim() || 'แว่นตาคุณภาพสูงจากร้านTATOE Optical'
+      images: imageUrl ? [imageUrl] : [],
+      description: description.trim()
     });
 
     onClose();
@@ -210,7 +185,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="เช่น Big Eye Urban Titanium"
+              placeholder="เช่น ชื่อรุ่นแว่นจาก SQL"
               className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface font-semibold focus:border-primary focus:outline-none"
             />
           </div>
@@ -249,7 +224,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
                 min="0"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="1290"
+                placeholder="ราคาจาก SQL"
                 className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-primary font-bold focus:border-primary focus:outline-none"
               />
             </div>
@@ -432,7 +407,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
                       type="button"
                       onClick={() => {
                         setCustomUrlInput('');
-                        setImageUrl(PRESET_IMAGES[0].url);
+                        setImageUrl('');
                       }}
                       className="px-2.5 h-9 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant text-[11px] font-medium"
                       title="ล้างลิงก์"

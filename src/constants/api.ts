@@ -62,3 +62,43 @@ export const clearSession = (): void => {
     console.error('ล้าง session ไม่สำเร็จ', e);
   }
 };
+
+// ============================================================================
+// Biometric Authentication (Touch ID / Face ID) Storage & Configuration
+// ============================================================================
+const BIOMETRIC_KEY = 'tatoe_biometric_auth';
+
+export interface BiometricAuthConfig {
+  enabled: boolean;
+  userEmail: string;
+  userName: string;
+  session: StoredSession;
+  deviceType?: 'touch_id' | 'face_id' | 'fingerprint' | 'biometric';
+  enabledAt: string;
+}
+
+export const saveBiometricConfig = (config: BiometricAuthConfig): void => {
+  try {
+    localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.error('บันทึกการตั้งค่า Biometric ไม่สำเร็จ', e);
+  }
+};
+
+export const loadBiometricConfig = (): BiometricAuthConfig | null => {
+  try {
+    const raw = localStorage.getItem(BIOMETRIC_KEY);
+    return raw ? (JSON.parse(raw) as BiometricAuthConfig) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const clearBiometricConfig = (): void => {
+  try {
+    localStorage.removeItem(BIOMETRIC_KEY);
+  } catch (e) {
+    console.error('ลบการตั้งค่า Biometric ไม่สำเร็จ', e);
+  }
+};
+

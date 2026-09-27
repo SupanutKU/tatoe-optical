@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { APP_LOGO } from '../data/mockData';
 import { ScreenId } from '../types';
-import { API_LOGIN_URL, buildAuthHeaders, saveSession, StoredSession } from '../constants/api';
+import {
+  API_LOGIN_URL,
+  buildAuthHeaders,
+  saveSession,
+  StoredSession,
+  loadBiometricConfig,
+  BiometricAuthConfig
+} from '../constants/api';
+import { BiometricVerificationModal } from './BiometricVerificationModal';
 
 interface LoginScreenProps {
   onLoginSuccess: (session: StoredSession) => void;
@@ -18,6 +26,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Biometric Quick Authentication State
+  const [biometricConfig] = useState<BiometricAuthConfig | null>(() => {
+    return loadBiometricConfig();
+  });
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+
+  const handleBiometricLoginSuccess = () => {
+    if (biometricConfig?.session) {
+      if (rememberMe) saveSession(biometricConfig.session);
+      onLoginSuccess(biometricConfig.session);
+    }
+    setIsBiometricModalOpen(false);
+  };
 
   const canSubmit = emailOrPhone.trim().length > 0 && password.trim().length > 0;
 
@@ -48,104 +70,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       if (rememberMe) saveSession(session);
       onLoginSuccess(session);
     } catch (error) {
-      const cleanInput = emailOrPhone.trim().toLowerCase();
-      // If entering known demo credentials and network/backend fails, gracefully log in with demo session
-      if (
-        cleanInput === 'customer@tatoe.com' ||
-        cleanInput === '081-234-5678' ||
-        cleanInput === '0812345678' ||
-        cleanInput === 'admin@tatoe.com' ||
-        cleanInput === 'pichaya.w@student.chula.ac.th'
-      ) {
-        const isAdmin = cleanInput !== 'customer@tatoe.com' && cleanInput !== '081-234-5678' && cleanInput !== '0812345678';
-        handleDirectDemoLogin(isAdmin ? 'admin' : 'customer');
-        return;
-      }
-
       const isNetworkError = error instanceof TypeError && /fetch/i.test(error.message);
       setErrorMessage(
         isNetworkError
-          ? `ติดต่อ server ไม่ได้ (${API_LOGIN_URL}) กรุณาคลิกเลือก "เข้าสู่ระบบทันที (1-Click Demo)" ด้านล่างเพื่อทดสอบระบบ`
+          ? `ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ (${API_LOGIN_URL}) กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต`
           : error instanceof Error
             ? error.message
-            : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง'
+            : 'อีเมล เบอร์โทรศัพท์ หรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง'
       );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDirectDemoLogin = async (role: 'customer' | 'admin') => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    const demoEmail = role === 'admin' ? 'pichaya.w@student.chula.ac.th' : 'customer@tatoe.com';
-    const demoPassword = 'password123';
-
-    try {
-      const response = await fetch(API_LOGIN_URL, {
-        method: 'POST',
-        headers: buildAuthHeaders(),
-        body: JSON.stringify({
-          emailOrPhone: demoEmail,
-          password: demoPassword
-        })
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        const session: StoredSession = { token: data.token, user: data.user };
-        if (rememberMe) saveSession(session);
-        onLoginSuccess(session);
-        return;
-      }
-      throw new Error(data.message || 'Login API fallback');
-    } catch {
-      // Ephemeral fallback session when backend server is restarting or offline
-      const fallbackSession: StoredSession =
-        role === 'admin'
-          ? {
-              token: 'demo-admin-token-12345',
-              user: {
-                id: 1,
-                user_name: 'คุณพิชญา วงศ์สว่าง (Admin)',
-                email: 'pichaya.w@student.chula.ac.th',
-                phone: '089-123-4567',
-                role: 'admin',
-                avatar_url:
-                  'https://lh3.googleusercontent.com/aida-public/AB6AXuAgfK7Go8t0q72RUgLa-XWGo7RtV9xjm3yg-D8dL6fuTyT4Rd8J-h-kpxXjlBONOGKFQXn9HM0Y9VZlUq61KYc15SQB1Om184Pn7dao0hpFA_xLTGGNCQ_ErMbQa9qo0f_n1nz_ACUdBRYGNfBzNbt-_xP4P24_h1X_laWzkmmYjr7i50uxSZQ9k-2jRPdCeSdmGpkgq9FyP2jVpogjkX3U67v2UXa0_MrYt30iaOGkk3G9kRQwmzfg',
-                member_tier: 'Big Eye Club - Gold Member',
-                member_points: 420,
-                shipping_address:
-                  'หอพักนักศึกษาจุฬาฯ อาคาร A ห้อง 412 ถนนพญาไท แขวงวังใหม่ เขตปทุมวัน กรุงเทพฯ 10330',
-                prescription_od_sphere: '-1.50',
-                prescription_od_cylinder: '0.00',
-                prescription_os_sphere: '-1.75',
-                prescription_os_cylinder: '0.00',
-                prescription_last_checked: '12 ม.ค. 2025'
-              }
-            }
-          : {
-              token: 'demo-customer-token-12345',
-              user: {
-                id: 2,
-                user_name: 'ลูกค้าตัวอย่าง (ทดสอบระบบ)',
-                email: 'customer@tatoe.com',
-                phone: '081-234-5678',
-                role: 'customer',
-                avatar_url: null,
-                member_tier: 'Member',
-                member_points: 100,
-                shipping_address: '123/45 ถนนสุขุมวิท คลองเตย กรุงเทพฯ 10110',
-                prescription_od_sphere: '-2.00',
-                prescription_od_cylinder: '-0.50',
-                prescription_os_sphere: '-2.25',
-                prescription_os_cylinder: '-0.50',
-                prescription_last_checked: '20 ม.ค. 2025'
-              }
-            };
-
-      if (rememberMe) saveSession(fallbackSession);
-      onLoginSuccess(fallbackSession);
     } finally {
       setIsLoading(false);
     }
@@ -169,6 +101,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             TATOE Optical - แว่นตาตาโต
           </p>
         </div>
+
+        {/* Biometric Quick Login (Touch ID / Face ID) */}
+        {biometricConfig?.enabled && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-surface-container-low border border-primary/25 flex flex-col gap-2.5 shadow-2xs animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-primary text-on-primary flex items-center justify-center shadow-xs">
+                  <span className="material-symbols-outlined text-[22px]">
+                    {biometricConfig.deviceType === 'touch_id' ? 'fingerprint' : 'face'}
+                  </span>
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-on-surface">เข้าสู่ระบบด่วน</p>
+                  <p className="text-[10px] text-on-surface-variant truncate max-w-[160px]">
+                    {biometricConfig.userName || biometricConfig.userEmail}
+                  </p>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/15 text-primary border border-primary/20">
+                {biometricConfig.deviceType === 'touch_id' ? 'Touch ID' : 'Face ID'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsBiometricModalOpen(true)}
+              className="w-full h-11 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {biometricConfig.deviceType === 'touch_id' ? 'fingerprint' : 'face'}
+              </span>
+              <span>สแกนเข้าสู่ระบบ (Biometric Sign In)</span>
+            </button>
+          </div>
+        )}
+
+        {/* Divider if biometric is available */}
+        {biometricConfig?.enabled && (
+          <div className="flex items-center gap-2 text-[10px] text-on-surface-variant/70">
+            <span className="h-px flex-1 bg-outline-variant/20"></span>
+            <span>หรือเข้าสู่ระบบด้วยรหัสผ่าน</span>
+            <span className="h-px flex-1 bg-outline-variant/20"></span>
+          </div>
+        )}
 
         {/* Error banner */}
         {errorMessage && (
@@ -346,117 +322,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             สมัครสมาชิก
           </button>
         </div>
-
-        {/* Test Accounts & Demo Login Hub */}
-        <div className="pt-3 border-t border-outline-variant/15 flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-on-surface flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-primary text-[16px]">
-                science
-              </span>
-              <span>บัญชีตัวอย่างสำหรับทดสอบระบบ</span>
-            </span>
-            <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-              Demo Test
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-2 text-xs">
-            {/* 1. Customer Demo Account Card */}
-            <div className="p-2.5 rounded-2xl bg-surface-container-low border border-outline-variant/25 flex flex-col gap-2 transition-all hover:border-primary/40">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                    👤
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-extrabold text-[11px] text-on-surface">
-                      1. ลูกค้าทั่วไป (Member Tier)
-                    </span>
-                    <span className="text-[10px] text-on-surface-variant font-mono">
-                      customer@tatoe.com • password123
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-on-surface-variant leading-tight pl-1 border-l-2 border-blue-400">
-                ทดสอบ: สั่งซื้อแว่น, ตะกร้าสินค้า, Virtual Try-on, ค่าสายตา, ยื่นใบเคลม & ดูรูปก่อน-หลังเคลม
-              </p>
-
-              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={() => handleDirectDemoLogin('customer')}
-                  className="h-8 rounded-xl bg-primary text-on-primary text-[10px] font-bold flex items-center justify-center gap-1 shadow-2xs hover:bg-primary-container active:scale-95 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[13px]">bolt</span>
-                  <span>เข้าสู่ระบบทันที (1-Click)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmailOrPhone('customer@tatoe.com');
-                    setPassword('password123');
-                  }}
-                  className="h-8 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-[10px] font-bold flex items-center justify-center gap-1 border border-outline-variant/25 active:scale-95 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[13px] text-outline">edit_note</span>
-                  <span>นำข้อมูลไปกรอกฟอร์ม</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Admin Demo Account Card */}
-            <div className="p-2.5 rounded-2xl bg-surface-container-low border border-outline-variant/25 flex flex-col gap-2 transition-all hover:border-amber-400/50">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                    👑
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-extrabold text-[11px] text-on-surface">
-                      2. ผู้ดูแลระบบ (Admin / Store Manager)
-                    </span>
-                    <span className="text-[10px] text-on-surface-variant font-mono">
-                      pichaya.w@student.chula.ac.th • password123
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-on-surface-variant leading-tight pl-1 border-l-2 border-amber-400">
-                ทดสอบ: สิทธิ์แอดมินจัดการสินค้า (เพิ่ม/แก้ไข/ลบสินค้า), ตรวจสต็อก, ดูแลคำสั่งซื้อและงานซ่อม
-              </p>
-
-              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={() => handleDirectDemoLogin('admin')}
-                  className="h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center gap-1 shadow-2xs active:scale-95 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[13px]">shield_person</span>
-                  <span>เข้าสู่ระบบแอดมินทันที</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmailOrPhone('pichaya.w@student.chula.ac.th');
-                    setPassword('password123');
-                  }}
-                  className="h-8 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-[10px] font-bold flex items-center justify-center gap-1 border border-outline-variant/25 active:scale-95 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[13px] text-outline">edit_note</span>
-                  <span>นำข้อมูลไปกรอกฟอร์ม</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
+
+      {/* Biometric Verification Modal */}
+      <BiometricVerificationModal
+        isOpen={isBiometricModalOpen}
+        onClose={() => setIsBiometricModalOpen(false)}
+        onSuccess={handleBiometricLoginSuccess}
+        mode="login"
+        userName={biometricConfig?.userName}
+        userEmail={biometricConfig?.userEmail}
+      />
     </div>
   );
 };

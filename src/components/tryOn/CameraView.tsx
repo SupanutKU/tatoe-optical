@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useCamera } from '../../hooks/useCamera';
 import { useFaceTracking } from '../../hooks/useFaceTracking';
 import { FaceTracker, type FaceTrackerDisplayState } from './FaceTracker';
-import { BabylonGlassesOverlay } from './BabylonGlassesOverlay';
+import { GlassesAROverlay } from './GlassesAROverlay';
 import type { FaceMetrics } from '../../lib/faceGeometry';
 import type { Product } from '../../types';
 
 interface CameraViewProps {
   active: boolean;
-  product: Product;
+  product?: Product;
   onCapture: (video: HTMLVideoElement, metrics: FaceMetrics | null, mirrored: boolean) => void;
   onMetricsUpdate?: (metrics: FaceMetrics | null) => void;
 }
@@ -75,7 +75,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
       />
 
       {camera.isActive && videoSize.width > 0 && (
-        <BabylonGlassesOverlay
+        <GlassesAROverlay
           metrics={tracking.metrics}
           product={product}
           mirrored={mirrored}
@@ -86,7 +86,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
       {(camera.isStarting || tracking.status === 'loading-model') && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 text-white text-xs z-20">
           <span className="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-          <span>{camera.isStarting ? 'กำลังเปิดกล้อง...' : 'กำลังเตรียมระบบ 3D...'}</span>
+          <span>{camera.isStarting ? 'กำลังเปิดกล้อง...' : 'กำลังเตรียมระบบลองแว่น...'}</span>
         </div>
       )}
 

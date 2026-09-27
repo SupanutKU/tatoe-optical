@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Product } from '../types';
 import { FilterModal } from './FilterModal';
 import { PriceRangeFilter } from './PriceRangeFilter';
+import { LowStockBadge, isProductLowStock } from './LowStockBadge';
 
 export type SortOption = 'popular' | 'price_asc' | 'price_desc';
 
@@ -587,6 +588,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               )}
               {/* Product Visual Showcase Box */}
               <div className="relative w-full aspect-[4/3] rounded-lg bg-surface-container-low overflow-hidden flex items-center justify-center p-2">
+                {/* Low Stock Urgency Badge on Top Left */}
+                {!isAdmin && isProductLowStock(item.stockStatus, item.stockCount) && (
+                  <LowStockBadge
+                    stockStatus={item.stockStatus}
+                    stockCount={item.stockCount}
+                    className="absolute top-2 left-2 z-10"
+                  />
+                )}
                 <img
                   src={item.images[0]}
                   alt={item.name}
@@ -629,10 +638,19 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               <div className="flex flex-col mt-2.5 gap-1 flex-1">
                 {/* Stock status & Rating Row */}
                 <div className="flex items-center justify-between text-xs">
-                  {item.stockStatus === 'low_stock' ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                      เหลือ {item.stockCount || 3} ชิ้นสุดท้าย
+                  {isProductLowStock(item.stockStatus, item.stockCount) ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/80">
+                      <span className="relative flex h-1.5 w-1.5 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-600"></span>
+                      </span>
+                      <span
+                        className="material-symbols-outlined text-[12px] text-amber-600"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        local_fire_department
+                      </span>
+                      <span>ใกล้หมด! เหลือ {item.stockCount || 3} ชิ้น</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-secondary">

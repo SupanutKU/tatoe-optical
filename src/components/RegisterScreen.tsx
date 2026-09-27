@@ -66,7 +66,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
       const isNetworkError = error instanceof TypeError && /fetch/i.test(error.message);
       setErrorMessage(
         isNetworkError
-          ? `ติดต่อ server ไม่ได้ (${API_REGISTER_URL}) กรุณาตรวจสอบว่า backend รันอยู่หรือยัง`
+          ? `ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ (${API_REGISTER_URL}) กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต`
           : error instanceof Error
             ? error.message
             : 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง'

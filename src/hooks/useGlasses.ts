@@ -10,7 +10,7 @@ export interface UseGlassesOptions {
 
 export interface UseGlassesResult {
   glasses: Product[];
-  selected: Product;
+  selected: Product | null;
   selectProduct: (product: Product) => void;
   overlaySrc: (product: Product) => string;
   faceShapeResult: FaceShapeResult | null;
@@ -20,12 +20,12 @@ export interface UseGlassesResult {
 }
 
 /** The image used for the AR overlay — a dedicated cutout if provided, else the primary product photo. */
-export function overlayImageForProduct(product: Product): string {
-  return product.overlayImage || product.images[0];
+export function overlayImageForProduct(product: Product | null | undefined): string {
+  return product?.overlayImage || product?.images?.[0] || '';
 }
 
 export function useGlasses({ products, initialProduct }: UseGlassesOptions): UseGlassesResult {
-  const [selected, setSelected] = useState<Product>(initialProduct || products[0]);
+  const [selected, setSelected] = useState<Product | null>(initialProduct || products[0] || null);
   const [faceShapeResult, setFaceShapeResult] = useState<FaceShapeResult | null>(null);
 
   const recommendations = useMemo(() => {

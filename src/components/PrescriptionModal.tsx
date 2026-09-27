@@ -6,18 +6,22 @@ interface PrescriptionModalProps {
   onClose: () => void;
   prescription: Prescription;
   onSave: (updated: Prescription) => void;
+  onOpenVisionTest?: () => void;
 }
 
 export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   isOpen,
   onClose,
   prescription,
-  onSave
+  onSave,
+  onOpenVisionTest
 }) => {
   const [odSph, setOdSph] = useState(prescription.od.sphere);
   const [osSph, setOsSph] = useState(prescription.os.sphere);
   const [odCyl, setOdCyl] = useState(prescription.od.cylinder || '0.00');
   const [osCyl, setOsCyl] = useState(prescription.os.cylinder || '0.00');
+  const [odAxis, setOdAxis] = useState(prescription.od.axis ? prescription.od.axis.replace('°', '') : '90');
+  const [osAxis, setOsAxis] = useState(prescription.os.axis ? prescription.os.axis.replace('°', '') : '90');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -25,8 +29,19 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
-      od: { sphere: odSph, cylinder: odCyl },
-      os: { sphere: osSph, cylinder: osCyl },
+      ...prescription,
+      od: {
+        ...prescription.od,
+        sphere: odSph,
+        cylinder: odCyl,
+        axis: odCyl && odCyl !== '0.00' ? `${odAxis}°` : undefined
+      },
+      os: {
+        ...prescription.os,
+        sphere: osSph,
+        cylinder: osCyl,
+        axis: osCyl && osCyl !== '0.00' ? `${osAxis}°` : undefined
+      },
       lastChecked: 'วันนี้ (อัปเดตล่าสุด)'
     });
     setSavedSuccess(true);
@@ -70,29 +85,41 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
               </span>
               <span className="text-[11px] text-on-surface-variant font-medium">ข้างขวา</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-[11px] text-on-surface font-semibold block mb-1">
-                  ค่าสายตา SPH (สั้น - / ยาว +)
+                  SPH (สั้น/ยาว)
                 </label>
                 <input
                   type="text"
                   value={odSph}
                   onChange={(e) => setOdSph(e.target.value)}
                   placeholder="-1.50"
-                  className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono font-bold text-sm text-primary focus:border-primary focus:outline-none"
+                  className="w-full h-10 px-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono font-bold text-xs text-primary focus:border-primary focus:outline-none"
                 />
               </div>
               <div>
                 <label className="text-[11px] text-on-surface font-semibold block mb-1">
-                  ค่าสายตาเอียง CYL
+                  CYL (เอียง)
                 </label>
                 <input
                   type="text"
                   value={odCyl}
                   onChange={(e) => setOdCyl(e.target.value)}
                   placeholder="0.00"
-                  className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono text-sm text-on-surface focus:border-primary focus:outline-none"
+                  className="w-full h-10 px-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono text-xs text-on-surface focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-on-surface font-semibold block mb-1">
+                  AXIS (องศา)
+                </label>
+                <input
+                  type="text"
+                  value={odAxis}
+                  onChange={(e) => setOdAxis(e.target.value)}
+                  placeholder="90"
+                  className="w-full h-10 px-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono text-xs text-secondary focus:border-secondary focus:outline-none"
                 />
               </div>
             </div>
@@ -107,33 +134,68 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
               </span>
               <span className="text-[11px] text-on-surface-variant font-medium">ข้างซ้าย</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-[11px] text-on-surface font-semibold block mb-1">
-                  ค่าสายตา SPH (สั้น - / ยาว +)
+                  SPH (สั้น/ยาว)
                 </label>
                 <input
                   type="text"
                   value={osSph}
                   onChange={(e) => setOsSph(e.target.value)}
                   placeholder="-1.75"
-                  className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono font-bold text-sm text-secondary focus:border-secondary focus:outline-none"
+                  className="w-full h-10 px-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono font-bold text-xs text-secondary focus:border-secondary focus:outline-none"
                 />
               </div>
               <div>
                 <label className="text-[11px] text-on-surface font-semibold block mb-1">
-                  ค่าสายตาเอียง CYL
+                  CYL (เอียง)
                 </label>
                 <input
                   type="text"
                   value={osCyl}
                   onChange={(e) => setOsCyl(e.target.value)}
                   placeholder="0.00"
-                  className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono text-sm text-on-surface focus:border-secondary focus:outline-none"
+                  className="w-full h-10 px-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono text-xs text-on-surface focus:border-secondary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-on-surface font-semibold block mb-1">
+                  AXIS (องศา)
+                </label>
+                <input
+                  type="text"
+                  value={osAxis}
+                  onChange={(e) => setOsAxis(e.target.value)}
+                  placeholder="90"
+                  className="w-full h-10 px-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 font-mono text-xs text-secondary focus:border-secondary focus:outline-none"
                 />
               </div>
             </div>
           </div>
+
+          {/* Online Vision Test CTA if user doesn't know their prescription */}
+          {onOpenVisionTest && (
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/5 border border-primary/20 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[20px]">visibility</span>
+                <div className="flex flex-col">
+                  <span className="font-bold text-[11px] text-on-surface">ไม่ทราบค่าสายตาของตนเอง?</span>
+                  <span className="text-[10px] text-on-surface-variant">ตรวจวัดสายตาออนไลน์ มีวัดเอียงและตาบอดสี</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenVisionTest();
+                }}
+                className="px-2.5 py-1.5 bg-primary text-on-primary rounded-xl text-[11px] font-bold shadow-xs active:scale-95 transition-all shrink-0 hover:bg-primary-container"
+              >
+                เริ่มตรวจ
+              </button>
+            </div>
+          )}
 
           {/* Quick Upload Button */}
           <div className="flex items-center justify-between p-3 rounded-xl bg-primary-fixed/30 text-on-primary-fixed">
