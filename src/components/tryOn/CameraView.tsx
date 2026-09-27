@@ -11,9 +11,11 @@ interface CameraViewProps {
   product?: Product;
   onCapture: (video: HTMLVideoElement, metrics: FaceMetrics | null, mirrored: boolean) => void;
   onMetricsUpdate?: (metrics: FaceMetrics | null) => void;
+  /** Hide the camera controls while the frame rail is expanded. */
+  controlsVisible?: boolean;
 }
 
-export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCapture, onMetricsUpdate }) => {
+export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCapture, onMetricsUpdate, controlsVisible = true }) => {
   const camera = useCamera();
   const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
 
@@ -98,8 +100,8 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
         />
       )}
 
-      {camera.isActive && (
-        <div className="absolute bottom-5 left-0 right-0 flex items-center justify-center gap-4 z-20">
+      {camera.isActive && controlsVisible && (
+        <div className="absolute bottom-[108px] sm:bottom-[118px] left-0 right-0 flex items-center justify-center gap-4 z-20 pointer-events-auto">
           {camera.hasMultipleCameras && (
             <button onClick={() => camera.switchCamera()} aria-label="สลับกล้อง" className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center active:scale-90 transition-all border border-white/15">
               <span className="material-symbols-outlined text-[21px]">cameraswitch</span>

@@ -105,34 +105,18 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
           ) : tryOn.frozenPhoto ? (
             <FrozenPhotoView photo={tryOn.frozenPhoto} glassesSrc={glassesSrc} retakeLabel="ถ่ายใหม่" onRetake={() => tryOn.retake()} />
           ) : (
-            <CameraView active={isOpen && tryOn.mode === 'camera'} product={glasses.selected || undefined} onCapture={(video, metrics, mirrored) => tryOn.captureFromVideo(video, metrics, mirrored)} onMetricsUpdate={handleMetrics} />
+            <CameraView
+              active={isOpen && tryOn.mode === 'camera'}
+              product={glasses.selected || undefined}
+              onCapture={(video, metrics, mirrored) => tryOn.captureFromVideo(video, metrics, mirrored)}
+              onMetricsUpdate={handleMetrics}
+              controlsVisible={!railExpanded}
+            />
           )}
 
           {tab === 'video' && !tryOn.frozenPhoto && (
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 rounded-full px-4 py-2 bg-black/45 border border-white/15 text-white/90 text-xs backdrop-blur-md">โหมดวิดีโอ • ขยับศีรษะเพื่อดูการติดตาม</div>
           )}
-
-          {/* Essilor-like product label */}
-          <div className="absolute left-0 bottom-28 sm:bottom-32 z-30 px-5 sm:px-7 pointer-events-none max-w-[70%]">
-            {glasses.selected ? (
-              <>
-                <div className="text-xs sm:text-sm text-white/85 drop-shadow">{glasses.selected.brand || glasses.selected.subtitle || 'กรอบแว่น'}</div>
-                <div className="text-xl sm:text-2xl font-bold text-white leading-tight drop-shadow truncate">{glasses.selected.name}</div>
-              </>
-            ) : (
-              <>
-                <div className="text-xs sm:text-sm text-white/80">Virtual Try-On</div>
-                <div className="text-xl sm:text-2xl font-bold text-white">เลือกกรอบจาก SQL</div>
-              </>
-            )}
-          </div>
-
-          {/* Camera / switch controls */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-16 sm:bottom-20 z-40 flex items-center gap-4 pointer-events-none">
-            <div className="w-12 h-12 rounded-full bg-black/45 border border-white/15" />
-            <div className="w-16 h-16 rounded-full bg-white/80 border-4 border-white/40 shadow-xl flex items-center justify-center"><span className="material-symbols-outlined text-black text-2xl">photo_camera</span></div>
-            <div className="w-12 h-12 rounded-full bg-black/45 border border-white/15" />
-          </div>
 
           <EssilorStyleRail products={products} selectedId={glasses.selected?.id} onSelect={selectProduct} expanded={railExpanded} onToggle={() => setRailExpanded(v => !v)} />
         </div>
