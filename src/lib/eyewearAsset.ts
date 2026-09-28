@@ -36,84 +36,233 @@ function colorDistance(a: [number, number, number], b: [number, number, number])
 }
 
 /**
- * Conservative browser-only background removal. It flood-fills pixels connected
- * to the image border when their color is close to the sampled corner background.
- * This is intentionally safer than deleting every white pixel because white
- * lenses and frame highlights must remain intact.
+ * Browser-only background removal for product photos.
+ *
+ * Studio/phone photos rarely have a perfectly flat backdrop: they carry soft
+ * gradients and cast shadows, so comparing every pixel to ONE sampled corner
+ * colour leaves a faint box (or, when the corners differ, skips removal
+ * entirely). Instead this flood-fills from the image border and lets the fill
+ * travel across pixels that are similar to the pixel it came from (smooth
+ * shading / soft shadows), while still requiring them to stay within a wider
+ * tolerance of the border colours. Sharp frame edges stop the fill. Finally,
+ * enclosed pixels that match the removed backdrop colour (the backdrop seen
+ * through the lenses) are cleared too. White lenses / highlights on the frame
+ * survive because they must match the backdrop colour AND, for the interior
+ * pass, be nearly identical to it.
  */
-function removeBorderBackground(canvas: HTMLCanvasElement, threshold: number, feather: number) {
+export function removeBorderBackground(canvas: HTMLCanvasElement, threshold: number, feather: number) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return;
   const { width, height } = canvas;
   const image = ctx.getImageData(0, 0, width, height);
   const data = image.data;
-  const sample = (x: number, y: number): [number, number, number] => {
-    const i = (y * width + x) * 4;
-    return [data[i], data[i + 1], data[i + 2]];
-  };
-  const corners = [sample(0, 0), sample(width - 1, 0), sample(0, height - 1), sample(width - 1, height - 1)];
-  const bg: [number, number, number] = [
-    corners.reduce((s, c) => s + c[0], 0) / corners.length,
-    corners.reduce((s, c) => s + c[1], 0) / corners.length,
-    corners.reduce((s, c) => s + c[2], 0) / corners.length,
-  ];
+  const px = (i: number): [number, number, number] => [data[i], data[i + 1], data[i + 2]];
 
-  // Only attempt removal when the corners look like a fairly uniform backdrop.
-  const cornerSpread = Math.max(...corners.map(c => colorDistance(c, bg)));
-  if (cornerSpread > threshold * 1.25) return;
+  // Border colour model: mean colour of the outer ring of pixels.
+  let sr = 0, sg = 0, sb = 0, sn = 0;
+  const addBorder = (x: number, y: number) => { const i = (y * width + x) * 4; sr += data[i]; sg += data[i + 1]; sb += data[i + 2]; sn++; };
+  for (let x = 0; x < width; x++) { addBorder(x, 0); addBorder(x, height - 1); }
+  for (let y = 1; y < height - 1; y++) { addBorder(0, y); addBorder(width - 1, y); }
+  const bg: [number, number, number] = [sr / sn, sg / sn, sb / sn];
 
-  const seen = new Uint8Array(width * height);
-  const queueX = new Int32Array(width * height);
-  const queueY = new Int32Array(width * height);
-  let head = 0, tail = 0;
-  const push = (x: number, y: number) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
-    const idx = y * width + x;
-    if (seen[idx]) return;
-    seen[idx] = 1;
-    queueX[tail] = x; queueY[tail] = y; tail++;
-  };
-  for (let x = 0; x < width; x++) { push(x, 0); push(x, height - 1); }
-  for (let y = 1; y < height - 1; y++) { push(0, y); push(width - 1, y); }
+  const stepTol = Math.max(8, threshold * 0.32);   // neighbour-to-neighbour change allowed (soft gradients)
+  const wideTol = threshold * 1.9;                  // how far from the reference colour the fill may drift
 
-  while (head < tail) {
-    const x = queueX[head];
-    const y = queueY[head++];
-    const i = (y * width + x) * 4;
-    const rgb: [number, number, number] = [data[i], data[i + 1], data[i + 2]];
-    const d = colorDistance(rgb, bg);
-    if (d <= threshold) {
-      data[i + 3] = 0;
-      push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
-    } else if (d <= threshold + feather) {
-      data[i + 3] = Math.min(data[i + 3], Math.round(((d - threshold) / Math.max(1, feather)) * data[i + 3]));
+  const total = width * height;
+  const removed = new Uint8Array(total);
+  const seen = new Uint8Array(total);
+  const queue = new Int32Array(total);
+
+  // Gradient-tolerant flood fill. Marks reached pixels in `removed` and
+  // returns their mean colour and count.
+  const flood = (seeds: number[], ref: [number, number, number]) => {
+    seen.set(removed);
+    let head = 0, tail = 0;
+    for (const idx of seeds) { if (!seen[idx]) { seen[idx] = 1; queue[tail++] = idx; } }
+    let rr = 0, rg = 0, rb = 0;
+    while (head < tail) {
+      const idx = queue[head++];
+      const x = idx % width, y = (idx - x) / width;
+      const here = px(idx * 4);
+      removed[idx] = 1;
+      rr += here[0]; rg += here[1]; rb += here[2];
+      const tryPush = (nx: number, ny: number) => {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+        const nidx = ny * width + nx;
+        if (seen[nidx]) return;
+        const nrgb = px(nidx * 4);
+        if (colorDistance(nrgb, here) <= stepTol && colorDistance(nrgb, ref) <= wideTol) {
+          seen[nidx] = 1; queue[tail++] = nidx;
+        }
+      };
+      tryPush(x + 1, y); tryPush(x - 1, y); tryPush(x, y + 1); tryPush(x, y - 1);
     }
+    const n = Math.max(1, tail);
+    return { mean: [rr / n, rg / n, rb / n] as [number, number, number], count: tail };
+  };
+
+  // Pass 1: from the image border.
+  const borderSeeds: number[] = [];
+  const consider = (x: number, y: number) => {
+    const idx = y * width + x;
+    if (colorDistance(px(idx * 4), bg) <= wideTol) borderSeeds.push(idx); // skip border pixels that are clearly frame
+  };
+  for (let x = 0; x < width; x++) { consider(x, 0); consider(x, height - 1); }
+  for (let y = 1; y < height - 1; y++) { consider(0, y); consider(width - 1, y); }
+  const first = flood(borderSeeds, bg);
+  if (first.count < total * 0.05) return; // barely moved: not a plain backdrop, leave the image alone
+
+  // Pass 2: enclosed backdrop (seen through the lenses, possibly shadowed).
+  const avg = first.mean;
+  const tight = Math.max(10, threshold * 0.55);
+  const interiorSeeds: number[] = [];
+  for (let idx = 0; idx < total; idx++) {
+    if (!removed[idx] && colorDistance(px(idx * 4), avg) <= tight) interiorSeeds.push(idx);
+  }
+  if (interiorSeeds.length) flood(interiorSeeds, avg);
+
+  // Alpha: removed -> transparent; soft halo for near-backdrop leftovers.
+  for (let idx = 0; idx < total; idx++) {
+    const i = idx * 4;
+    if (removed[idx]) { data[i + 3] = 0; continue; }
+    const d = colorDistance(px(i), avg);
+    if (d <= tight + feather) data[i + 3] = Math.round(data[i + 3] * Math.max(0, (d - tight) / Math.max(1, feather)));
   }
   ctx.putImageData(image, 0, 0);
 }
 
-function cropToAlpha(canvas: HTMLCanvasElement): HTMLCanvasElement {
+/**
+ * Cleans a product photo after background removal:
+ *  1. drops small detached blobs (mirror reflections / shadows under the lenses, specks);
+ *  2. makes big, compact, light-grey blobs see-through — that is the "film" of a clear lens.
+ *     A frame ring is thin/elongated so it never passes the compactness test, which keeps
+ *     white or silver frames intact.
+ */
+export function cleanEyewearCanvas(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return canvas;
+  if (!ctx) return;
+  const { width: w, height: h } = canvas;
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const total = w * h;
+  const OPAQUE = 40;
+
+  const label = new Int32Array(total);
+  const queue = new Int32Array(total);
+  const labelComponents = (inMask: (idx: number) => boolean) => {
+    label.fill(0);
+    const areas: number[] = [0];
+    for (let start = 0; start < total; start++) {
+      if (label[start] || !inMask(start)) continue;
+      const id = areas.length;
+      let head = 0, tail = 0, area = 0;
+      label[start] = id; queue[tail++] = start;
+      while (head < tail) {
+        const idx = queue[head++]; area++;
+        const x = idx % w;
+        if (x > 0 && !label[idx - 1] && inMask(idx - 1)) { label[idx - 1] = id; queue[tail++] = idx - 1; }
+        if (x < w - 1 && !label[idx + 1] && inMask(idx + 1)) { label[idx + 1] = id; queue[tail++] = idx + 1; }
+        if (idx >= w && !label[idx - w] && inMask(idx - w)) { label[idx - w] = id; queue[tail++] = idx - w; }
+        if (idx < total - w && !label[idx + w] && inMask(idx + w)) { label[idx + w] = id; queue[tail++] = idx + w; }
+      }
+      areas.push(area);
+    }
+    return areas;
+  };
+
+  // 1) detached blobs
+  const areas = labelComponents((i) => d[i * 4 + 3] > OPAQUE);
+  const largest = Math.max(0, ...areas);
+  if (largest === 0) return;
+  const minKeep = Math.max(largest * 0.06, total * 0.0008);
+  for (let i = 0; i < total; i++) {
+    const id = label[i];
+    if (id && areas[id] < minKeep) d[i * 4 + 3] = 0;
+  }
+
+  // 1b) reflections / cast shadows under the frame: light, neutral pixels that sit below the
+  //     lowest dark-or-coloured (= frame/tinted lens) pixel of their own column are not part of the glasses.
+  {
+    const isCore = (o: number) => {
+      const r = d[o], g = d[o + 1], b = d[o + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.35 || (mx ? (mx - mn) / mx : 0) > 0.25;
+    };
+    const lowestCore = new Int32Array(w).fill(-1);
+    let coreCount = 0, opaqueCount = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      if (d[o + 3] <= OPAQUE) continue;
+      opaqueCount++;
+      if (isCore(o)) { coreCount++; lowestCore[x] = y; }
+    }
+    if (opaqueCount > 0 && coreCount >= opaqueCount * 0.015) { // skip silver/white frames that have no dark core
+      const margin = Math.max(2, Math.round(h * 0.006));
+      for (let x = 0; x < w; x++) {
+        const cut = lowestCore[x];
+        if (cut < 0) continue;
+        for (let y = cut + margin; y < h; y++) {
+          const o = (y * w + x) * 4;
+          if (d[o + 3] <= 0) continue;
+          const r = d[o], g = d[o + 1], b = d[o + 2];
+          const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+          if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.45 && (mx ? (mx - mn) / mx : 0) < 0.2) d[o + 3] = 0;
+        }
+      }
+    }
+  }
+
+  // 2) clear-lens film: large, compact, light and neutral
+  const isLightNeutral = (i: number) => {
+    const o = i * 4;
+    if (d[o + 3] <= OPAQUE) return false;
+    const r = d[o], g = d[o + 1], b = d[o + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.5 && (mx === 0 ? 0 : (mx - mn) / mx) < 0.18;
+  };
+  const blobAreas = labelComponents(isLightNeutral);
+  const perimeter = new Int32Array(blobAreas.length);
+  for (let i = 0; i < total; i++) {
+    const id = label[i];
+    if (!id) continue;
+    const x = i % w;
+    if (x === 0 || x === w - 1 || i < w || i >= total - w || label[i - 1] !== id || label[i + 1] !== id || label[i - w] !== id || label[i + w] !== id) perimeter[id]++;
+  }
+  const isLens = blobAreas.map((a, id) => id > 0 && a >= total * 0.015 && a / Math.max(1, perimeter[id]) ** 2 > 0.03);
+  for (let i = 0; i < total; i++) {
+    const id = label[i];
+    if (id && isLens[id]) d[i * 4 + 3] = Math.round(d[i * 4 + 3] * 0.1);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+export function cropToAlphaWithOffset(canvas: HTMLCanvasElement): { canvas: HTMLCanvasElement; offsetX: number; offsetY: number } {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return { canvas, offsetX: 0, offsetY: 0 };
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = image.data;
   let minX = canvas.width, minY = canvas.height, maxX = -1, maxY = -1;
   for (let y = 0; y < canvas.height; y++) {
     for (let x = 0; x < canvas.width; x++) {
-      if (d[(y * canvas.width + x) * 4 + 3] > 18) {
+      if (d[(y * canvas.width + x) * 4 + 3] > 40) {
         minX = Math.min(minX, x); minY = Math.min(minY, y);
         maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
       }
     }
   }
-  if (maxX < 0) return canvas;
+  if (maxX < 0) return { canvas, offsetX: 0, offsetY: 0 };
   const pad = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) * 0.015));
   minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
   maxX = Math.min(canvas.width - 1, maxX + pad); maxY = Math.min(canvas.height - 1, maxY + pad);
   const out = document.createElement('canvas');
   out.width = maxX - minX + 1; out.height = maxY - minY + 1;
   out.getContext('2d')?.drawImage(canvas, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
-  return out;
+  return { canvas: out, offsetX: minX, offsetY: minY };
+}
+
+export function cropToAlpha(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  return cropToAlphaWithOffset(canvas).canvas;
 }
 
 function canvasToDataUrl(canvas: HTMLCanvasElement) {
