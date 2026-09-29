@@ -1,0 +1,445 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Product } from '../types';
+
+interface AdminProductModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  productToEdit?: Product | null;
+  onSave: (productData: Partial<Product> & { id?: string }) => void | Promise<boolean>;
+  onDelete?: (productId: string) => void;
+}
+
+const PRESET_IMAGES: { label: string; url: string }[] = [];
+
+export const AdminProductModal: React.FC<AdminProductModalProps> = ({
+  isOpen,
+  onClose,
+  productToEdit,
+  onSave,
+  onDelete
+}) => {
+  const [name, setName] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [subtitle, setSubtitle] = useState('');
+  const [colorName, setColorName] = useState('');
+  const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
+  const [category, setCategory] = useState<'prescription' | 'sunglasses' | 'blue-light' | 'sports'>('prescription');
+  const [shape, setShape] = useState<'round' | 'square' | 'drop' | 'cat-eye'>('square');
+  const [material, setMaterial] = useState<'titanium' | 'acetate' | 'tr90' | 'metal'>('titanium');
+  const [lensType, setLensType] = useState('เลนส์บลูบล็อกปรับแสงอัตโนมัติ');
+  const [weight, setWeight] = useState('8.5g');
+  const [size, setSize] = useState('51-18-142 mm');
+  const [tag, setTag] = useState('Ultra Light');
+  const [badge, setBadge] = useState<'Best Seller' | 'New' | ''>('New');
+  const [stockStatus, setStockStatus] = useState<'in_stock' | 'low_stock' | 'out_of_stock'>('in_stock');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageInputMode, setImageInputMode] = useState<'url' | 'upload'>('url');
+  const [customUrlInput, setCustomUrlInput] = useState('');
+  const [description, setDescription] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (productToEdit) {
+      setName(productToEdit.name);
+      setSubtitle(productToEdit.subtitle || '');
+      setColorName(productToEdit.colorName);
+      setPrice(productToEdit.price.toString());
+      setOriginalPrice(productToEdit.originalPrice ? productToEdit.originalPrice.toString() : '');
+      setCategory(productToEdit.category);
+      setShape(productToEdit.shape);
+      setMaterial(productToEdit.material);
+      setLensType(productToEdit.lensType);
+      setWeight(productToEdit.weight);
+      setSize(productToEdit.size);
+      setTag(productToEdit.tag || '');
+      setBadge(productToEdit.badge || '');
+      setStockStatus(productToEdit.stockStatus);
+      const initialImg = productToEdit.images[0] || '';
+      setImageUrl(initialImg);
+      if (initialImg.startsWith('data:')) {
+        setImageInputMode('upload');
+        setCustomUrlInput('');
+      } else {
+        setImageInputMode('url');
+        setCustomUrlInput(initialImg);
+      }
+      setDescription(productToEdit.description);
+    } else {
+      setName('');
+      setSubtitle('');
+      setColorName('ดำด้าน Matte Black');
+      setPrice('');
+      setOriginalPrice('');
+      setCategory('prescription');
+      setShape('square');
+      setMaterial('titanium');
+      setLensType('เลนส์บลูบล็อกปรับแสงอัตโนมัติ');
+      setWeight('8.5g');
+      setSize('51-18-142 mm');
+      setTag('');
+      setBadge('New');
+      setStockStatus('in_stock');
+      setImageUrl('');
+      setImageInputMode('url');
+      setCustomUrlInput('');
+      setDescription('');
+    }
+  }, [productToEdit, isOpen]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setFormError('กรุณาเลือกไฟล์รูปภาพเท่านั้น (JPG, PNG, WebP)');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setImageUrl(event.target.result);
+        setFormError(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setFormError('กรุณากรอกชื่อรุ่นแว่นตา');
+      return;
+    }
+    setFormError(null);
+
+    const numPrice = parseFloat(price) || 0;
+    const numOriginal = originalPrice ? parseFloat(originalPrice) : undefined;
+    const discountPct = numOriginal && numOriginal > numPrice
+      ? Math.round(((numOriginal - numPrice) / numOriginal) * 100)
+      : undefined;
+
+    const result = await onSave({
+      id: productToEdit?.id,
+      name: name.trim(),
+      subtitle: subtitle.trim() || undefined,
+      colorName: colorName.trim() || 'สีมาตรฐาน',
+      price: numPrice,
+      originalPrice: numOriginal,
+      discountPercentage: discountPct,
+      category,
+      shape,
+      material,
+      lensType: lensType.trim(),
+      weight: weight.trim(),
+      size: size.trim(),
+      tag: tag.trim() || undefined,
+      badge: (badge as 'Best Seller' | 'New') || undefined,
+      stockStatus,
+      images: imageUrl ? [imageUrl] : [],
+      description: description.trim()
+    });
+
+    // When the callback is async, close only after SQL confirms the write.
+    // A failed request leaves the form open so the admin can retry.
+    if (result !== false) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-inverse-surface/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-[430px] bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="px-5 py-4 flex items-center justify-between border-b border-outline-variant/20 bg-surface-container-low">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[22px]">
+              {productToEdit ? 'edit_note' : 'add_circle'}
+            </span>
+            <h3 className="font-bold text-[16px] text-on-surface">
+              {productToEdit ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้าใหม่ (Admin)'}
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors active:scale-90"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto flex flex-col gap-4 text-xs">
+          {formError && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-error-container text-on-error-container text-xs font-semibold">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              <span>{formError}</span>
+            </div>
+          )}
+
+          {/* Product Name */}
+          <div className="flex flex-col gap-1">
+            <label className="font-bold text-on-surface text-[11px]">ชื่อรุ่นแว่นตา *</label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="เช่น ชื่อรุ่นแว่นจาก SQL"
+              className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface font-semibold focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          {/* Price & Original Price */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-primary text-[11px]">ราคาขาย (฿) *</label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="ราคาจาก SQL"
+                className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-primary font-bold focus:border-primary focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-semibold text-on-surface-variant text-[11px]">ราคาเดิม (฿)</label>
+              <input
+                type="number"
+                min="0"
+                value={originalPrice}
+                onChange={(e) => setOriginalPrice(e.target.value)}
+                placeholder="1890"
+                className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface-variant focus:border-primary focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Color & Stock Status */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="font-semibold text-on-surface text-[11px]">สีกรอบแว่น</label>
+              <input
+                type="text"
+                value={colorName}
+                onChange={(e) => setColorName(e.target.value)}
+                placeholder="เช่น ดำด้าน Matte Black"
+                className="w-full h-9 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface focus:border-primary focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-semibold text-on-surface text-[11px]">สถานะสินค้า</label>
+              <select
+                value={stockStatus}
+                onChange={(e) => setStockStatus(e.target.value as any)}
+                className="w-full h-9 px-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface font-medium focus:border-primary focus:outline-none"
+              >
+                <option value="in_stock">มีสินค้าพร้อมส่ง</option>
+                <option value="low_stock">เหลือจำนวนจำกัด</option>
+                <option value="out_of_stock">สินค้าหมดชั่วคราว</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Category */}
+          <div className="flex flex-col gap-1">
+            <label className="font-semibold text-on-surface text-[11px]">หมวดหมู่</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as any)}
+              className="w-full h-9 px-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface focus:border-primary focus:outline-none text-[11px]"
+            >
+              <option value="prescription">แว่นสายตา</option>
+              <option value="sunglasses">แว่นกันแดด</option>
+              <option value="blue-light">แว่นกรองแสง</option>
+              <option value="sports">แว่นกีฬา</option>
+            </select>
+          </div>
+
+          {/* Image Input Section: URL or Upload */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-on-surface text-[11px] flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px] text-primary">image</span>
+                <span>รูปภาพสินค้า *</span>
+              </label>
+
+              {/* Mode Tabs: URL vs Upload */}
+              <div className="inline-flex p-0.5 bg-surface-container-low rounded-lg border border-outline-variant/30 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setImageInputMode('url')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    imageInputMode === 'url'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  🔗 วางลิงก์ URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageInputMode('upload')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    imageInputMode === 'upload'
+                      ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  📤 อัปโหลดรูป
+                </button>
+              </div>
+            </div>
+
+            {/* Mode 1: URL input */}
+            {imageInputMode === 'url' && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[16px]">
+                      link
+                    </span>
+                    <input
+                      type="url"
+                      value={customUrlInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomUrlInput(val);
+                        if (val.trim()) {
+                          setImageUrl(val.trim());
+                        }
+                      }}
+                      placeholder="วางลิงก์รูปภาพ เช่น https://example.com/glasses.jpg"
+                      className="w-full h-9 pl-8 pr-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface focus:border-primary focus:outline-none text-xs"
+                    />
+                  </div>
+                  {customUrlInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomUrlInput('');
+                        setImageUrl('');
+                      }}
+                      className="px-2.5 h-9 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant text-[11px] font-medium"
+                      title="ล้างลิงก์"
+                    >
+                      ล้าง
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-on-surface-variant pl-1">
+                  รองรับลิงก์รูปภาพสาธารณะ เช่น จากเว็บไซต์, Google Photos, Cloudinary หรือ CDN
+                </p>
+              </div>
+            )}
+
+            {/* Mode 2: File Upload */}
+            {imageInputMode === 'upload' && (
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp, image/gif"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="admin-product-file-upload"
+                />
+                <label
+                  htmlFor="admin-product-file-upload"
+                  className="w-full border-2 border-dashed border-outline-variant/50 hover:border-primary/60 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 bg-surface-container-low/60 hover:bg-surface-container-low cursor-pointer transition-all active:scale-[0.99]"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[20px]">cloud_upload</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="font-bold text-xs text-primary">คลิกเพื่อเลือกไฟล์รูปภาพจากอุปกรณ์</span>
+                    <p className="text-[10px] text-on-surface-variant mt-0.5">
+                      รองรับ JPG, PNG, WEBP (แปลงและบันทึกอัตโนมัติ)
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Current Image Preview & Status */}
+            <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-container-low border border-outline-variant/20">
+              <div className="w-14 h-14 rounded-lg bg-surface-container-lowest border border-outline-variant/30 overflow-hidden flex items-center justify-center shrink-0">
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt="ภาพตัวอย่างสินค้า"
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-[24px] text-outline-variant">image</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-on-surface">พรีวิวรูปสินค้า</span>
+                  {imageUrl && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-semibold bg-primary/10 text-primary">
+                      {imageUrl.startsWith('data:') ? 'ไฟล์อัปโหลด' : 'จาก URL'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-on-surface-variant truncate mt-0.5">
+                  {imageUrl
+                    ? imageUrl.startsWith('data:')
+                      ? 'รูปภาพที่เลือกจากเครื่องของคุณ'
+                      : imageUrl
+                    : 'ยังไม่ได้เลือกรูปภาพ'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="flex flex-col gap-1">
+            <label className="font-semibold text-on-surface text-[11px]">รายละเอียดสินค้า</label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="ระบุจุดเด่นและความสบายในการสวมใส่..."
+              className="w-full p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface focus:border-primary focus:outline-none text-xs"
+            ></textarea>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/20">
+            {productToEdit && onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(productToEdit.id);
+                  onClose();
+                }}
+                className="h-11 px-3.5 rounded-xl bg-error-container text-on-error-container hover:bg-red-200 font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+                title="ลบสินค้านี้ออกจากระบบ"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                <span>ลบสินค้า</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-11 rounded-xl bg-surface-container-high text-on-surface font-semibold text-xs active:scale-98 transition-all"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              className="flex-1 h-11 rounded-xl bg-primary text-on-primary font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-98 transition-all"
+            >
+              <span className="material-symbols-outlined text-[16px]">save</span>
+              <span>{productToEdit ? 'บันทึกการแก้ไข' : 'บันทึกสินค้าใหม่'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
