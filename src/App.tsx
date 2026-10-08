@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ScreenId, Product, CartItem, UserProfile, Prescription, UserAddress, ChatThread, ChatProductAttachment, ProductReview, DeliveryOrder, DeliveryStage, AppNotification } from './types';
 import { MOCK_USER, INITIAL_CART, formatAddress, INITIAL_CHAT_THREADS, INITIAL_REVIEWS, INITIAL_DELIVERY_ORDER, INITIAL_NOTIFICATIONS, DELIVERY_STAGE_CONFIG } from './data/mockData';
 import { BottomNav } from './components/BottomNav';
+import { AdminDashboard } from './components/AdminDashboard';
 import { HomeScreen } from './components/HomeScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { ProductDetailScreen } from './components/ProductDetailScreen';
@@ -60,6 +61,7 @@ type NavigationDirection = 'forward' | 'back';
  */
 const getNavDirection = (from: ScreenId, to: ScreenId): NavigationDirection => {
   const TAB_ORDER: Record<string, number> = {
+    'admin-dashboard': -1,
     home: 0,
     search: 1,
     cart: 2,
@@ -107,6 +109,7 @@ export default function App() {
       setAuthToken(session.token);
       setUser(mapSessionUserToProfile(session.user));
       setIsAuthenticated(true);
+      setCurrentScreen(session.user.role === 'admin' ? 'admin-dashboard' : 'home');
     }
   }, []);
 
@@ -121,7 +124,9 @@ export default function App() {
     setAuthToken(session.token);
     setUser(mapSessionUserToProfile(session.user));
     setIsAuthenticated(true);
-    navigateTo('home');
+    setPreviousScreen('login');
+    setNavDirection('forward');
+    setCurrentScreen(session.user.role === 'admin' ? 'admin-dashboard' : 'home');
   };
 
   const handleLogout = () => {
@@ -135,26 +140,52 @@ export default function App() {
   // The UI keeps only a synchronized in-memory copy for rendering.
   const [products, setProducts] = useState<Product[]>([]);
 
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState<Date | null>(null);
+  const catalogRequestRef = React.useRef(0);
+
   useEffect(() => {
+    if (!isAuthenticated) return;
     let cancelled = false;
-    fetchProducts()
-      .then((rows) => {
-        if (cancelled) return;
+    const refreshProducts = async () => {
+      const version = ++catalogRequestRef.current;
+      setCatalogLoading(true);
+      setCatalogError(null);
+      try {
+        const rows = await fetchProducts();
+        if (cancelled || version !== catalogRequestRef.current) return;
         setProducts(rows);
-        setSelectedProduct((current) => current && rows.some((p) => p.id === current.id) ? current : (rows[0] || null));
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.error('โหลดสินค้าจาก SQL ไม่สำเร็จ:', error);
-          showToast('เชื่อมต่อรายการสินค้าจาก SQL ไม่สำเร็จ กรุณาตรวจสอบ backend / ฐานข้อมูล');
-        }
-      })
-      .finally(() => {
-      });
+        setSelectedProduct(current => rows.find(p => p.id === current?.id) ?? rows[0] ?? null);
+        setCatalogUpdatedAt(new Date());
+      } catch (error) {
+        if (cancelled || version !== catalogRequestRef.current) return;
+        const message = error instanceof Error ? error.message : 'โหลดรายการสินค้าไม่สำเร็จ';
+        setCatalogError(message);
+        showToast(message);
+      } finally {
+        if (!cancelled && version === catalogRequestRef.current) setCatalogLoading(false);
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshProducts();
+    };
+    void refreshProducts();
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       cancelled = true;
+      ++catalogRequestRef.current;
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, []);
+  }, [isAuthenticated, authToken]);
+
+  useEffect(() => {
+    if (isAuthenticated && currentScreen === 'admin-dashboard' && user.role !== 'admin') {
+      setCurrentScreen('home');
+    }
+  }, [isAuthenticated, currentScreen, user.role]);
   const [cartItems, setCartItems] = useState<CartItem[]>(INITIAL_CART);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [wishlist, setWishlist] = useState<string[]>([]);
@@ -289,6 +320,7 @@ export default function App() {
   };
 
   const navigateTo = (screen: ScreenId, forcedDirection?: NavigationDirection) => {
+    if (screen === 'admin-dashboard' && (!isAuthenticated || user.role !== 'admin')) return;
     if (screen === currentScreen) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -601,16 +633,19 @@ export default function App() {
 
   // --- Admin Role & CRUD Handlers ---
   const handleOpenAddProduct = () => {
+    if (!isAuthenticated || user.role !== 'admin') return;
     setEditingProduct(null);
     setIsAdminProductModalOpen(true);
   };
 
   const handleOpenEditProduct = (product: Product) => {
+    if (!isAuthenticated || user.role !== 'admin') return;
     setEditingProduct(product);
     setIsAdminProductModalOpen(true);
   };
 
   const handleSaveProduct = async (data: Partial<Product> & { id?: string }) => {
+    if (!isAuthenticated || user.role !== 'admin') return false;
     try {
       if (data.id) {
         // Update SQL first. The UI is updated only after the database confirms the write.
@@ -639,6 +674,7 @@ export default function App() {
   };
 
   const handleRequestDeleteProduct = (productId: string) => {
+    if (!isAuthenticated || user.role !== 'admin') return;
     const target = products.find((p) => p.id === productId);
     if (target) {
       setProductToDelete(target);
@@ -675,14 +711,23 @@ export default function App() {
   };
 
   const handleResetProducts = async () => {
+    const version = ++catalogRequestRef.current;
+    setCatalogLoading(true);
+    setCatalogError(null);
     try {
       const rows = await fetchProducts();
+      if (version !== catalogRequestRef.current) return;
       setProducts(rows);
-      setSelectedProduct((current) => current && rows.some((p) => p.id === current.id) ? current : (rows[0] || null));
-      showToast(`ซิงค์สินค้า ${rows.length} รายการจาก SQL เรียบร้อยแล้ว`);
+      setSelectedProduct(current => rows.find(p => p.id === current?.id) ?? rows[0] ?? null);
+      setCatalogUpdatedAt(new Date());
+      showToast(`ซิงค์สินค้า ${rows.length} รายการเรียบร้อยแล้ว`);
     } catch (error) {
-      console.error('ซิงค์สินค้าไม่สำเร็จ:', error);
-      showToast(error instanceof Error ? error.message : 'ซิงค์สินค้าจาก SQL ไม่สำเร็จ');
+      if (version !== catalogRequestRef.current) return;
+      const message = error instanceof Error ? error.message : 'โหลดรายการสินค้าไม่สำเร็จ';
+      setCatalogError(message);
+      showToast(message);
+    } finally {
+      if (version === catalogRequestRef.current) setCatalogLoading(false);
     }
   };
 
@@ -706,7 +751,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-surface font-sans text-on-surface flex flex-col items-center">
       {/* Container simulating mobile frame */}
-      <div className="w-full max-w-[430px] min-h-screen bg-surface relative flex flex-col shadow-2xl overflow-x-hidden">
+      <div className={`w-full ${currentScreen === 'admin-dashboard' ? 'max-w-[1200px]' : 'max-w-[430px]'} min-h-screen bg-surface relative flex flex-col shadow-2xl overflow-x-hidden`}>
         {/* Main Content Area - with generous padding for smooth scrolling */}
         <main
           className={`flex-1 flex flex-col px-margin ${
@@ -722,6 +767,11 @@ export default function App() {
                 : 'animate-screen-slide-forward'
             }`}
           >
+            {isAuthenticated && user.role === 'admin' && currentScreen === 'admin-dashboard' && (
+              <AdminDashboard products={products} loading={catalogLoading} error={catalogError} lastUpdated={catalogUpdatedAt}
+                onRefresh={handleResetProducts} onAdd={handleOpenAddProduct} onEdit={handleOpenEditProduct}
+                onDelete={handleRequestDeleteProduct} onNavigate={navigateTo} />
+            )}
             {currentScreen === 'home' && (
             <HomeScreen
               user={user}
@@ -880,6 +930,7 @@ export default function App() {
 
         {isAuthenticated && (
           <BottomNav
+            isAdmin={user.role === 'admin'}
             currentScreen={currentScreen}
             cartCount={cartCount}
             onNavigate={navigateTo}

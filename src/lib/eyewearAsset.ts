@@ -56,6 +56,16 @@ export function removeBorderBackground(canvas: HTMLCanvasElement, threshold: num
   const { width, height } = canvas;
   const image = ctx.getImageData(0, 0, width, height);
   const data = image.data;
+  // A PNG cutout already has an alpha background. Its transparent RGB values
+  // are often black; treating those as a backdrop erases black frame rims.
+  let borderPixels = 0, transparentBorder = 0;
+  for (let x=0;x<width;x++) for (const y of [0,height-1]) {
+    borderPixels++; if(data[(y*width+x)*4+3]<20) transparentBorder++;
+  }
+  for(let y=1;y<height-1;y++) for(const x of [0,width-1]) {
+    borderPixels++; if(data[(y*width+x)*4+3]<20) transparentBorder++;
+  }
+  if (transparentBorder > borderPixels * 0.75) return;
   const px = (i: number): [number, number, number] => [data[i], data[i + 1], data[i + 2]];
 
   // Border colour model: mean colour of the outer ring of pixels.

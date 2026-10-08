@@ -3,12 +3,14 @@ import { ScreenId } from '../types';
 
 interface BottomNavProps {
   currentScreen: ScreenId;
+  isAdmin?: boolean;
   cartCount: number;
   onNavigate: (screen: ScreenId) => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   currentScreen,
+  isAdmin = false,
   cartCount,
   onNavigate
 }) => {
@@ -19,6 +21,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   }
 
   const navItems: { id: ScreenId; label: string; icon: string; badge?: number }[] = [
+    ...(isAdmin ? [{ id: 'admin-dashboard' as ScreenId, label: 'Dashboard', icon: 'dashboard' }] : []),
     { id: 'home', label: 'หน้าหลัก', icon: 'home' },
     { id: 'search', label: 'ค้นหา', icon: 'search' },
     { id: 'cart', label: 'ตะกร้า', icon: 'shopping_bag', badge: cartCount },
@@ -38,7 +41,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`relative flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-0.5 transition-all duration-200 active:scale-90 ${
+              className={`relative flex flex-col items-center justify-center min-w-[48px] min-h-[44px] gap-0.5 transition-all duration-200 active:scale-90 ${
                 isActive
                   ? 'text-primary font-semibold scale-105'
                   : 'text-on-surface-variant hover:text-on-surface'

@@ -12,9 +12,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export async function fetchProducts(): Promise<Product[]> {
-  const response = await fetch(base(), { headers: { Accept: 'application/json' } });
+  const response = await fetch(base(), { headers: { Accept: 'application/json' }, cache: 'no-store' });
   const payload = await parseResponse<{ success: boolean; products: Product[] }>(response);
-  return Array.isArray(payload.products) ? payload.products : [];
+  if (!Array.isArray(payload.products)) throw new Error('รูปแบบข้อมูลสินค้าไม่ถูกต้อง กรุณาตรวจสอบ API ที่เชื่อมต่อ');
+  return payload.products;
 }
 
 export async function createProduct(data: Partial<Product>): Promise<Product> {

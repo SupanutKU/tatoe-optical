@@ -1,3 +1,5 @@
+import { drawSeamlessTexture } from './projectiveTexture';
+import { cleanLensInteriors } from './lensCleanup';
 import type { FaceMetrics, Point2D } from './faceGeometry';
 
 export interface GlassesTransform {
@@ -271,6 +273,15 @@ export function frontOnlyImage(image: CanvasImageSource): CanvasImageSource {
       }
     }
   } catch { /* tainted canvas (CORS): draw the original */ }
+  // Clean the final front image, including arms attached to the rim inside lenses.
+  // Copy first: asset dimensions and all existing anchors remain unchanged.
+  try {
+    const sw = (out as HTMLImageElement).naturalWidth || (out as HTMLCanvasElement).width;
+    const sh = (out as HTMLImageElement).naturalHeight || (out as HTMLCanvasElement).height;
+    const clean = document.createElement('canvas'); clean.width = sw; clean.height = sh;
+    clean.getContext('2d')?.drawImage(out, 0, 0);
+    if (cleanLensInteriors(clean)) out = clean;
+  } catch { /* CORS: retain the readable/renderable original. */ }
   frontCache.set(key, out);
   return out;
 }
@@ -357,7 +368,9 @@ export function computeGlassesTransform({
   const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   const aspect = glassesNaturalHeight / Math.max(1, glassesNaturalWidth);
   const eyeDist = Math.max(1, finite(metrics.eyeDistancePx, 1));
-  const fa = analyzeFrameImage(image);
+  const fa = image && hasAiFrameAnchors(image as object)
+    ? analyzeFrameImage(image)
+    : analyzeFrameImage(image ? frontOnlyImage(image) : image);
 
   // ---- LENS-CENTRE FIT ----
   // The two lens centres of the PRODUCT PHOTO (read by AI, or from the alpha mask) are pinned to the
@@ -555,20 +568,6 @@ function mapSourceToScreen(
   return { x: mirrored ? screenW - x0 : x0, y: p.y * scale + cropY };
 }
 
-function drawSoftShadow(
-  ctx: CanvasRenderingContext2D,
-  image: DrawImage,
-  quad: [Point2D, Point2D, Point2D, Point2D],
-  opacity = 0.16
-) {
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  const w = Math.hypot(quad[1].x - quad[0].x, quad[1].y - quad[0].y);
-  ctx.translate(0, Math.max(2, w * 0.012));
-  drawProjectiveImage(ctx, image, quad, 3);
-  ctx.restore();
-}
-
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 function bilerp(q: [Point2D, Point2D, Point2D, Point2D], u: number, v: number): Point2D {
@@ -648,13 +647,14 @@ function drawTemples(
 
     // yaw > 0 => screen-right side is farther (see project()).
     const far = side * yaw > 0 ? clamp(Math.abs(yaw) / 0.6, 0, 1) : 0;
-    const minRun = W * 0.16 * Math.max(0, 1 - 1.8 * far);
+    if (far > 0.18) return;
+    const minRun = 0;
 
     const vx = ear.x - hinge.x, vy = ear.y - hinge.y;
     let run = vx * out.x + vy * out.y;                  // outward distance to the ear
     let drop = vx * down.x + vy * down.y;               // downward distance to the ear
     run = clamp(Math.max(run, minRun), 0, W * 0.6);
-    if (run < armWidth * 1.5) return;                   // far arm hidden behind the face
+    if (run < armWidth * 1.5 || Math.abs(yaw) < 0.08) return;                   // far arm hidden behind the face
     drop = clamp(drop, -0.10 * run, 0.70 * run);        // never steeply up
 
     // Only the first part of the arm is shown, fading to nothing: it reads as tucking behind the cheek / hair
@@ -712,10 +712,7 @@ export function drawGlasses(
   void options?.sourceSize;
 
   const front = frontOnlyImage(image);
-  ctx.save();
-  ctx.globalAlpha = transform.opacity;
-  drawSoftShadow(ctx, front, transform.quad);
-  ctx.restore();
+  // Compose lens pixels once. Arms carry their own soft shadow.
 
   // Temples first so the hinge end tucks under the front frame.
   if (metrics && options?.drawTemples !== false) {
@@ -726,7 +723,9 @@ export function drawGlasses(
   ctx.save();
   ctx.globalAlpha = transform.opacity;
   ctx.globalCompositeOperation = 'source-over';
-  drawProjectiveImage(ctx, front, transform.quad, 8);
+  if (!drawSeamlessTexture(ctx, front, transform.quad)) {
+    drawProjectiveImage(ctx, front, transform.quad, 8);
+  }
   ctx.restore();
 
   // Very faint window-light glare on each lens (top-left), like a real lens surface. Alpha stays low

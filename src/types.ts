@@ -1,4 +1,5 @@
 export type ScreenId = 
+  | 'admin-dashboard'
   | 'home'
   | 'search'
   | 'detail'
