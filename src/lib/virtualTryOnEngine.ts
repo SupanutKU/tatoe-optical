@@ -769,11 +769,13 @@ export function mapMetricsToDisplay(
   const scaleMetric = (v: number) => v * sx;
   return {
     ...metrics,
+    faceSurface: metrics.faceSurface?.map(p => ({ ...map(p), z: scaleMetric(p.z) })),
+    bridgeDepth: metrics.bridgeDepth !== undefined ? scaleMetric(metrics.bridgeDepth) : undefined,
     eyeCenter: map(metrics.eyeCenter),
     noseBridge: map(metrics.noseBridge),
     noseTip: { ...metrics.noseTip, ...map(metrics.noseTip) },
-    leftEye: { ...metrics.leftEye, ...map(metrics.leftEye) },
-    rightEye: { ...metrics.rightEye, ...map(metrics.rightEye) },
+    leftEye: { ...map(metrics.leftEye), z: scaleMetric(metrics.leftEye.z) },
+    rightEye: { ...map(metrics.rightEye), z: scaleMetric(metrics.rightEye.z) },
     leftOuterEye: map(metrics.leftOuterEye),
     rightOuterEye: map(metrics.rightOuterEye),
     leftEar: map(metrics.leftEar),
@@ -790,6 +792,7 @@ export function mapMetricsToDisplay(
     rollDeg: mirrored ? -metrics.rollDeg : metrics.rollDeg,
     yawRatio: mirrored ? -metrics.yawRatio : metrics.yawRatio,
     yawRad: metrics.yawRad !== undefined ? (mirrored ? -metrics.yawRad : metrics.yawRad) : undefined,
+    headQuaternion: metrics.headQuaternion && mirrored ? [metrics.headQuaternion[0], -metrics.headQuaternion[1], -metrics.headQuaternion[2], metrics.headQuaternion[3]] : metrics.headQuaternion,
     outerEyeDistPx3D: metrics.outerEyeDistPx3D !== undefined ? scaleMetric(metrics.outerEyeDistPx3D) : undefined,
   };
 }

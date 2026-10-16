@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as THREE from 'three';
+import { renderModelThumbnail } from '../lib/modelPreview';
+import { prepareModelFit } from '../lib/modelAutoFit';
 import { Product } from '../types';
 
 interface AdminProductModalProps {
@@ -10,6 +14,11 @@ interface AdminProductModalProps {
 }
 
 const PRESET_IMAGES: { label: string; url: string }[] = [];
+const MODEL_PRESETS = [
+  { label: 'กรอบดำทรงเหลี่ยม', file: 'tatoe_square.glb', shape: 'square', material: 'acetate' },
+  { label: 'กรอบกลมไทเทเนียม', file: 'tatoe_round.glb', shape: 'round', material: 'titanium' },
+  { label: 'Aviator สีทอง', file: 'tatoe_aviator.glb', shape: 'drop', material: 'metal' },
+] as const;
 
 export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   isOpen,
@@ -33,6 +42,11 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   const [tag, setTag] = useState('Ultra Light');
   const [badge, setBadge] = useState<'Best Seller' | 'New' | ''>('New');
   const [stockStatus, setStockStatus] = useState<'in_stock' | 'low_stock' | 'out_of_stock'>('in_stock');
+  const [model3d, setModel3d] = useState('');
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelFilename, setModelFilename] = useState('');
+  const modelReadId = useRef(0);
+  const [isSaving, setIsSaving] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageInputMode, setImageInputMode] = useState<'url' | 'upload'>('url');
   const [customUrlInput, setCustomUrlInput] = useState('');
@@ -40,7 +54,9 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    modelReadId.current++; setModelLoading(false); setModelFilename(''); setFormError(null);
     if (productToEdit) {
+      setModel3d(productToEdit.model3d || '');
       setName(productToEdit.name);
       setSubtitle(productToEdit.subtitle || '');
       setColorName(productToEdit.colorName);
@@ -66,6 +82,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       }
       setDescription(productToEdit.description);
     } else {
+      setModel3d('');
       setName('');
       setSubtitle('');
       setColorName('ดำด้าน Matte Black');
@@ -104,10 +121,61 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const handleModelUpload = async (file?: File, presetUrl?: string, requestId?: number) => {
+    if (!file) return;
+    const readId = requestId ?? ++modelReadId.current;
+    setModelLoading(true); setFormError(null);
+    try {
+      if (!file.name.toLowerCase().endsWith('.glb') || file.size > 10*1024*1024) throw new Error('เลือก GLB ขนาดไม่เกิน 10 MB');
+      const bytes = await file.arrayBuffer(); const header = new DataView(bytes);
+      if (header.byteLength < 20 || header.getUint32(0,true)!==0x46546c67 || header.getUint32(4,true)!==2 || header.getUint32(8,true)!==bytes.byteLength) throw new Error('ไฟล์ GLB ไม่ถูกต้อง');
+      const gltf = await new GLTFLoader().parseAsync(bytes, '');
+      let thumbnail = '';
+      try {
+        // Thumbnail generation must not prevent a valid model from being saved.
+        try { thumbnail = renderModelThumbnail(gltf.scene); } catch { /* WebGL unavailable */ }
+        prepareModelFit(gltf.scene);
+      }
+      finally {
+        gltf.scene.traverse(o => {
+          if (!(o instanceof THREE.Mesh)) return;
+          o.geometry.dispose();
+          for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+            for (const v of Object.values(m)) if (v instanceof THREE.Texture) v.dispose();
+            m.dispose();
+          }
+        });
+      }
+      const dataUrl = presetUrl || await new Promise<string>((resolve,reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('อ่านไฟล์โมเดลไม่ได้')); reader.readAsDataURL(file);
+      });
+      if (readId === modelReadId.current) { setModel3d(dataUrl); setModelFilename(file.name); if (thumbnail) { setImageUrl(current => current || thumbnail); if (!imageUrl) { setImageInputMode('upload'); setCustomUrlInput(''); } } }
+    } catch (error) { if (readId === modelReadId.current) setFormError(error instanceof Error ? error.message : 'อ่านไฟล์โมเดลไม่ได้'); }
+    finally { if (readId === modelReadId.current) setModelLoading(false); }
+  };
+
+  const handleModelPreset = async (preset: typeof MODEL_PRESETS[number]) => {
+    const readId = ++modelReadId.current;
+    setModelLoading(true); setFormError(null);
+    try {
+      const url = `/models/${preset.file}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('โหลดโมเดลไม่ได้ กรุณาตรวจสอบไฟล์ใน public/models');
+      const file = new File([await response.blob()], preset.file, { type: 'model/gltf-binary' });
+      if (readId !== modelReadId.current) return;
+      await handleModelUpload(file, url, readId);
+      if (readId === modelReadId.current) { setShape(preset.shape); setMaterial(preset.material); }
+    } catch (error) {
+      if (readId === modelReadId.current) setFormError(error instanceof Error ? error.message : 'โหลดโมเดลไม่ได้');
+    } finally { if (readId === modelReadId.current) setModelLoading(false); }
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (modelLoading || isSaving) return;
     if (!name.trim()) {
       setFormError('กรุณากรอกชื่อรุ่นแว่นตา');
       return;
@@ -120,6 +188,8 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       ? Math.round(((numOriginal - numPrice) / numOriginal) * 100)
       : undefined;
 
+    setIsSaving(true);
+    try {
     const result = await onSave({
       id: productToEdit?.id,
       name: name.trim(),
@@ -137,6 +207,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
       tag: tag.trim() || undefined,
       badge: (badge as 'Best Seller' | 'New') || undefined,
       stockStatus,
+      model3d: model3d.trim(),
       images: imageUrl ? [imageUrl] : [],
       description: description.trim()
     });
@@ -144,6 +215,8 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
     // When the callback is async, close only after SQL confirms the write.
     // A failed request leaves the form open so the admin can retry.
     if (result !== false) onClose();
+    } catch { setFormError('บันทึกสินค้าไม่สำเร็จ กรุณาลองใหม่'); }
+    finally { setIsSaving(false); }
   };
 
   return (
@@ -257,6 +330,17 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
             </select>
           </div>
 
+          <div className="flex flex-col gap-2">
+            <label className="font-bold text-xs">โมเดลแว่น 3D (ไม่บังคับ)</label>
+            <input aria-label="URL โมเดลแว่น 3D" value={model3d.startsWith('data:') ? '' : model3d} placeholder="/models/aviator_lavender.glb หรือ URL" disabled={modelLoading || isSaving} onChange={e => { setModel3d(e.target.value); setModelFilename(''); }} className="w-full rounded-xl border p-2 text-xs" />
+            <p className="text-xs text-on-surface-variant">แนบโมเดลประจำสินค้า ลูกค้าจะลองแว่นรุ่นนี้ได้ทันทีโดยไม่ต้องเลือกไฟล์</p>
+            <input aria-label="อัปโหลดโมเดลแว่น GLB" type="file" accept=".glb" disabled={modelLoading || isSaving} onChange={e => { const file=e.target.files?.[0]; e.target.value=''; void handleModelUpload(file); }} className="text-xs" />
+            <div className="grid grid-cols-3 gap-2" aria-label="โมเดลแว่นสำเร็จรูป">
+              {MODEL_PRESETS.map(preset => <button key={preset.file} type="button" disabled={modelLoading || isSaving} aria-pressed={model3d === `/models/${preset.file}`} className={`rounded-xl border p-2 text-xs text-primary disabled:opacity-50 ${model3d === `/models/${preset.file}` ? 'border-primary bg-primary/10' : 'border-outline-variant'}`} onClick={() => { void handleModelPreset(preset); }}>ใช้{preset.label}</button>)}
+            </div>
+            {modelLoading && <p role="status" className="text-xs">กำลังตรวจสอบและแนบโมเดล…</p>}
+            {model3d && <div className="flex gap-2 text-xs"><span>{modelFilename || 'โมเดลของสินค้า'} • พร้อมบันทึก</span><button type="button" disabled={modelLoading || isSaving} onClick={() => { setModel3d(''); setModelFilename(''); }}>ลบโมเดล</button></div>}
+          </div>
           {/* Image Input Section: URL or Upload */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -432,6 +516,7 @@ export const AdminProductModal: React.FC<AdminProductModalProps> = ({
             </button>
             <button
               type="submit"
+              disabled={modelLoading || isSaving}
               className="flex-1 h-11 rounded-xl bg-primary text-on-primary font-bold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-98 transition-all"
             >
               <span className="material-symbols-outlined text-[16px]">save</span>

@@ -25,7 +25,10 @@ export function overlayImageForProduct(product: Product | null | undefined): str
 }
 
 export function useGlasses({ products, initialProduct }: UseGlassesOptions): UseGlassesResult {
-  const [selected, setSelected] = useState<Product | null>(initialProduct || products[0] || null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialProduct?.id || null);
+  const selected = products.find(product => product.id === selectedId)
+    || products.find(product => product.id === initialProduct?.id)
+    || products[0] || null;
   const [faceShapeResult, setFaceShapeResult] = useState<FaceShapeResult | null>(null);
 
   const recommendations = useMemo(() => {
@@ -36,7 +39,7 @@ export function useGlasses({ products, initialProduct }: UseGlassesOptions): Use
   return {
     glasses: products,
     selected,
-    selectProduct: setSelected,
+    selectProduct: product => setSelectedId(product.id),
     overlaySrc: overlayImageForProduct,
     faceShapeResult,
     recommendations,

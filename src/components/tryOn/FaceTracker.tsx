@@ -25,13 +25,13 @@ export const FaceTracker: React.FC<FaceTrackerProps> = ({ state, pdMm, message }
   const config = STATE_CONFIG[state];
 
   return (
-    <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-white/95 text-[11px] px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md z-10">
+    <div className="absolute top-16 left-4 right-4 flex items-center justify-between text-white/95 text-[11px] px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md z-10">
       <span className="flex items-center gap-1.5 truncate">
         <span className={`w-2 h-2 rounded-full shrink-0 ${config.dotClass}`}></span>
         <span className="truncate">{message || config.label}</span>
       </span>
       {state === 'detected' && pdMm ? (
-        <span className="font-mono text-[10px] shrink-0 ml-2">PD: {pdMm} mm</span>
+        <span className="text-[10px] shrink-0 ml-2">ปรับตามใบหน้า</span>
       ) : null}
     </div>
   );

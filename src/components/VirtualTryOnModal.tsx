@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Product } from '../types';
 import { useVirtualTryOn } from '../hooks/useVirtualTryOn';
 import { useGlasses, overlayImageForProduct } from '../hooks/useGlasses';
@@ -29,7 +29,9 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
   currentProduct,
   onSelectProduct,
 }) => {
-  const glasses = useGlasses({ products, initialProduct: currentProduct });
+  const tryOnProducts = useMemo(() => products.filter(product => !!product.model3d), [products]);
+  const glasses = useGlasses({ products: tryOnProducts, initialProduct: currentProduct });
+  const [pickedProduct, setPickedProduct] = useState(false);
   const tryOn = useVirtualTryOn();
   const [tab, setTab] = useState<TryOnTab>('live');
   const [help, setHelp] = useState(false);
@@ -46,12 +48,14 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
       setTab('live');
       setHelp(false);
       setRailExpanded(false);
+      setPickedProduct(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
-    if (currentProduct) glasses.selectProduct(currentProduct);
+    if (currentProduct?.model3d) glasses.selectProduct(currentProduct);
+    setPickedProduct(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProduct?.id]);
 
@@ -65,9 +69,12 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
   if (!isOpen) return null;
 
   const activeMetrics = tryOn.frozenPhoto?.status === 'ready' ? tryOn.frozenPhoto.metrics : liveMetrics;
-  const glassesSrc = overlayImageForProduct(glasses.selected);
+  const needsSelection = !!currentProduct && !currentProduct.model3d && !pickedProduct;
+  const glassesSrc = needsSelection ? '' : overlayImageForProduct(glasses.selected);
+  const renderProduct = needsSelection ? undefined : glasses.selected || undefined;
 
   const selectProduct = (product: Product) => {
+    setPickedProduct(true);
     glasses.selectProduct(product);
     onSelectProduct?.(product);
   };
@@ -100,14 +107,15 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
         )}
 
         <div className="absolute inset-0">
+          {(needsSelection || !tryOnProducts.length) && <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 max-w-[90%] rounded-xl bg-black/65 px-4 py-2 text-center text-sm text-white">{tryOnProducts.length ? 'เลือกรุ่นที่พร้อมลองเสมือนจริงจากรายการด้านล่าง' : 'ยังไม่มีกรอบที่พร้อมลองเสมือนจริง'}</div>}
           {tab === 'upload' ? (
-            <UploadView photo={tryOn.frozenPhoto} isProcessing={tryOn.isProcessingUpload} glassesSrc={glassesSrc} product={glasses.selected} onFileSelected={file => tryOn.handleUploadFile(file)} onRetake={() => tryOn.retake()} />
+            <UploadView photo={tryOn.frozenPhoto} isProcessing={tryOn.isProcessingUpload} glassesSrc={glassesSrc} product={renderProduct} onFileSelected={file => tryOn.handleUploadFile(file)} onRetake={() => tryOn.retake()} />
           ) : tryOn.frozenPhoto ? (
-            <FrozenPhotoView photo={tryOn.frozenPhoto} glassesSrc={glassesSrc} product={glasses.selected} retakeLabel="ถ่ายใหม่" onRetake={() => tryOn.retake()} />
+            <FrozenPhotoView photo={tryOn.frozenPhoto} glassesSrc={glassesSrc} product={renderProduct} retakeLabel="ถ่ายใหม่" onRetake={() => tryOn.retake()} />
           ) : (
             <CameraView
               active={isOpen && tryOn.mode === 'camera'}
-              product={glasses.selected || undefined}
+              product={renderProduct}
               onCapture={(video, metrics, mirrored) => tryOn.captureFromVideo(video, metrics, mirrored)}
               onMetricsUpdate={handleMetrics}
               controlsVisible={!railExpanded}
@@ -118,7 +126,7 @@ export const VirtualTryOnModal: React.FC<VirtualTryOnModalProps> = ({
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 rounded-full px-4 py-2 bg-black/45 border border-white/15 text-white/90 text-xs backdrop-blur-md">โหมดวิดีโอ • ขยับศีรษะเพื่อดูการติดตาม</div>
           )}
 
-          <EssilorStyleRail products={products} selectedId={glasses.selected?.id} onSelect={selectProduct} expanded={railExpanded} onToggle={() => setRailExpanded(v => !v)} />
+          <EssilorStyleRail products={tryOnProducts} selectedId={renderProduct?.id} onSelect={selectProduct} expanded={railExpanded} onToggle={() => setRailExpanded(v => !v)} />
         </div>
 
         {activeMetrics && products.length > 0 && (

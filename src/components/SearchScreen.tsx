@@ -1,3 +1,4 @@
+import { ProductVisual } from './ProductVisual';
 import React, { useState, useRef, useEffect } from 'react';
 import { Product } from '../types';
 import { FilterModal } from './FilterModal';
@@ -599,9 +600,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                     className="absolute top-2 left-2 z-10"
                   />
                 )}
-                <img
-                  src={item.images[0]}
-                  alt={item.name}
+                <ProductVisual product={item}
                   className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                 />
                 {/* Favorite Heart Button */}

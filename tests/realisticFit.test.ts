@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {computeFaceMetrics,mirrorFaceMetrics,LM} from '../src/lib/faceGeometry';
+import {prepareModelFit} from '../src/lib/modelAutoFit';
+import {computePerspectiveFit,projectPoint,reconstructSkinPoint} from '../src/lib/perspectiveFit';
+import {mapMetricsToDisplay} from '../src/lib/virtualTryOnEngine';
+const points=Array.from({length:478},()=>({x:.5,y:.5,z:0}));
+points[LM.LEFT_IRIS_CENTER]={x:.44,y:.48,z:0};points[LM.RIGHT_IRIS_CENTER]={x:.56,y:.48,z:0};
+points[LM.LEFT_CHEEK]={x:.36,y:.5,z:0};points[LM.RIGHT_CHEEK]={x:.64,y:.5,z:0};
+points[LM.FOREHEAD]={x:.5,y:.3,z:0};points[LM.CHIN]={x:.5,y:.7,z:0};
+const rotation=new THREE.Quaternion().setFromEuler(new THREE.Euler(.3,.55,.15,'ZYX'));
+const matrix=new THREE.Matrix4().compose(new THREE.Vector3(1,-2,-30),rotation,new THREE.Vector3(1,1,1)).toArray();
+const metrics=computeFaceMetrics(points,640,480,matrix)!;
+assert.equal(metrics.poseSource,'matrix');
+assert.ok(new THREE.Quaternion().fromArray(metrics.headQuaternion!).angleTo(rotation)<1e-7);
+assert.ok(Math.abs(metrics.yawRad!-.55)<1e-7); // Iris depth suggests zero: matrix must not be discarded.
+const mirrored=mirrorFaceMetrics(metrics,640);
+assert.equal(mirrored.faceSurface![0].x,640-metrics.faceSurface![0].x);
+assert.equal(mirrored.headQuaternion![1],-metrics.headQuaternion![1]);
+assert.deepEqual(mapMetricsToDisplay(metrics,640,480,640,480,true).headQuaternion,mirrored.headQuaternion);
+const bytes=fs.readFileSync('public/models/aviator_lavender.glb');
+const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+const fit=prepareModelFit(gltf.scene);
+for(const mirrored of [false,true])for(const yaw of [-.65,0,.65])for(const pitch of [-.5,0,.6]){
+ const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch,yaw,.2,'ZYX'));
+ const axis=new THREE.Vector3(1,0,0).applyQuaternion(q);
+ const sample={...metrics,eyeCenter:{x:320,y:230},leftEye:{x:320-axis.x*45,y:230-axis.y*45,z:axis.z*45},rightEye:{x:320+axis.x*45,y:230+axis.y*45,z:-axis.z*45},pdPx3D:90,eyeDistancePx:Math.hypot(axis.x,axis.y)*90,faceWidthPx:180,templeWidthPx3D:180,faceHeightPx:240,headQuaternion:q.toArray() as [number,number,number,number],yawRad:yaw,pitchRad:pitch,bridgeDepth:0};
+ const m=mapMetricsToDisplay(sample,640,480,800,600,mirrored);
+ const view={width:800,height:600,focal:600};
+ const pose=computePerspectiveFit(m,fit,view);
+ const projected=fit.lensCenters!.map(p=>projectPoint(p.clone().multiplyScalar(pose.width).applyQuaternion(pose.quaternion).add(pose.position),view)).sort((a,b)=>a.x-b.x);
+ const eyes=[m.leftEye,m.rightEye].sort((a,b)=>a.x-b.x);
+ for(let i=0;i<2;i++)assert.ok(projected[i].distanceTo(new THREE.Vector2(eyes[i].x-400,300-eyes[i].y))<.8,JSON.stringify({yaw,pitch,mirrored,i}));
+ const skin=reconstructSkinPoint({x:m.leftEye.x,y:m.leftEye.y,z:-400},0,view,pose,m);
+ const normal=new THREE.Vector3(0,0,1).applyQuaternion(pose.quaternion);
+ assert.ok(normal.dot(skin.clone().sub(pose.position))<0);
+ const reprojection=projectPoint(skin,view);
+ assert.ok(reprojection.distanceTo(new THREE.Vector2(m.leftEye.x-400,300-m.leftEye.y))<1e-6);
+}
+console.log('Passed: matrix pose survives unreliable iris depth, mirrored mesh/pose, perspective pupil seating and guarded skin depth across 18 poses.');

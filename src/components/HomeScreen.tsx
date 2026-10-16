@@ -1,3 +1,4 @@
+import { ProductVisual } from './ProductVisual';
 import React, { useState } from 'react';
 import { Product, UserProfile, ScreenId } from '../types';
 import { APP_LOGO } from '../data/mockData';
@@ -489,9 +490,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </button>
                   )}
 
-                  <img
-                    src={item.images[0]}
-                    alt={item.name}
+                  <ProductVisual product={item}
                     className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
@@ -570,9 +569,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     {item.tag}
                   </span>
                 ) : null}
-                <img
-                  src={item.images[0]}
-                  alt={item.name}
+                <ProductVisual product={item}
                   className="w-full h-full object-contain mix-blend-multiply"
                 />
               </div>

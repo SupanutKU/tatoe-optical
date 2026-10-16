@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useCamera } from '../../hooks/useCamera';
 import { useFaceTracking } from '../../hooks/useFaceTracking';
 import { FaceTracker, type FaceTrackerDisplayState } from './FaceTracker';
+import { ThreeGlassesOverlay } from './ThreeGlassesOverlay';
 import { GlassesAROverlay } from './GlassesAROverlay';
 import type { FaceMetrics } from '../../lib/faceGeometry';
 import type { Product } from '../../types';
@@ -77,7 +78,11 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
       />
 
       {camera.isActive && videoSize.width > 0 && (
-        <GlassesAROverlay
+        !product ? null : product.model3d ? <ThreeGlassesOverlay
+          modelUrl={product.model3d} metrics={tracking.metrics} metricsRef={tracking.metricsRef}
+          videoSize={videoSize} mirrored={mirrored}
+          fitMultiplier={product.tryOnFitMultiplier} verticalOffset={product.tryOnVerticalOffset}
+        /> : <GlassesAROverlay
           metrics={tracking.metrics}
           metricsRef={tracking.metricsRef}
           product={product}
@@ -90,6 +95,13 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 text-white text-xs z-20">
           <span className="w-7 h-7 border-2 border-white/40 border-t-white rounded-full animate-spin" />
           <span>{camera.isStarting ? 'กำลังเปิดกล้อง...' : 'กำลังเตรียมระบบลองแว่น...'}</span>
+        </div>
+      )}
+
+      {camera.isActive && (tracking.status === 'error' || tracking.status === 'unsupported') && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/50 px-6 text-center text-white">
+          <p className="text-sm">{tracking.errorMessage || 'เริ่มระบบลองแว่นไม่สำเร็จ'}</p>
+          <button onClick={() => { camera.stop(); requestAnimationFrame(() => { void camera.start(); }); }} className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#071b4b]">ลองใหม่</button>
         </div>
       )}
 
@@ -109,7 +121,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
             </button>
           )}
           <button
-            onClick={() => onCapture(camera.videoRef.current as HTMLVideoElement, tracking.metrics, mirrored)}
+            onClick={() => onCapture(camera.videoRef.current as HTMLVideoElement, tracking.metricsRef.current, mirrored)}
             disabled={tracking.status !== 'tracking'}
             aria-label="ถ่ายภาพ"
             className="w-[68px] h-[68px] rounded-full bg-white flex items-center justify-center shadow-xl active:scale-90 transition-all disabled:opacity-40 border-[5px] border-white/40"

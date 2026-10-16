@@ -1,0 +1,4 @@
+MediaPipe Tasks Vision runtime: @mediapipe/tasks-vision 0.10.35
+Project: https://github.com/google-ai-edge/mediapipe
+Face Landmarker model: https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+These files are served locally to keep the runtime and model version consistent.

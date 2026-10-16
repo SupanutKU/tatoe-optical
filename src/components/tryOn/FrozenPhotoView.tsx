@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ThreeGlassesOverlay } from './ThreeGlassesOverlay';
 import { GlassesOverlay } from './GlassesOverlay';
 import { FaceTracker, type FaceTrackerDisplayState } from './FaceTracker';
 import type { FrozenPhoto } from '../../hooks/useVirtualTryOn';
@@ -25,6 +26,32 @@ export const FrozenPhotoView: React.FC<FrozenPhotoViewProps> = ({
   onRetake,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [saveError, setSaveError] = useState('');
+
+  const savePhoto = () => {
+    setSaveError('');
+    // Copy in the same animation frame as WebGL rendering, before its drawing
+    // buffer is cleared; use the preview's exact object-cover crop.
+    requestAnimationFrame(() => {
+      const host = hostRef.current, photoCanvas = canvasRef.current;
+      if (!host || !photoCanvas) return;
+      if (product?.model3d && !host.querySelector('[data-model-ready="true"]')) { setSaveError('กำลังเตรียมภาพลองแว่น กรุณารอสักครู่'); return; }
+      try {
+        const width = host.clientWidth, height = host.clientHeight;
+        const output = document.createElement('canvas');
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        output.width = Math.round(width*ratio); output.height = Math.round(height*ratio);
+        const ctx = output.getContext('2d'); if (!ctx) return;
+        const scale = Math.max(width/photoCanvas.width,height/photoCanvas.height);
+        ctx.drawImage(photoCanvas,(photoCanvas.width-width/scale)/2,(photoCanvas.height-height/scale)/2,width/scale,height/scale,0,0,output.width,output.height);
+        const modelCanvas = host.querySelector<HTMLCanvasElement>('[data-tryon-layer] canvas');
+        if (modelCanvas) ctx.drawImage(modelCanvas,0,0,output.width,output.height);
+        const link = document.createElement('a');
+        link.download = 'tatoe-try-on.png'; link.href = output.toDataURL('image/png'); link.click();
+      } catch { setSaveError('บันทึกรูปไม่สำเร็จ กรุณาลองใหม่'); }
+    });
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,7 +93,7 @@ export const FrozenPhotoView: React.FC<FrozenPhotoViewProps> = ({
 
     Promise.all([
       loadCachedImage(photo.src),
-      photo.metrics && photo.status === 'ready' && glassesSrc
+      !product?.model3d && photo.metrics && photo.status === 'ready' && glassesSrc
         ? prepareEyewearAsset(glassesSrc, { maxDimension: 1400, backgroundThreshold: 46, feather: 18 })
         : Promise.resolve(null),
     ])
@@ -104,8 +131,13 @@ export const FrozenPhotoView: React.FC<FrozenPhotoViewProps> = ({
   const showBlockingMessage = photo.status === 'no-face' || photo.status === 'multiple-faces' || photo.status === 'error';
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden">
+    <div ref={hostRef} className="relative w-full h-full bg-black overflow-hidden">
       <GlassesOverlay ref={canvasRef} />
+      {product?.model3d && photo.status === 'ready' && <ThreeGlassesOverlay
+        modelUrl={product.model3d} metrics={photo.metrics}
+        videoSize={{ width: photo.naturalWidth, height: photo.naturalHeight }}
+        fitMultiplier={product.tryOnFitMultiplier} verticalOffset={product.tryOnVerticalOffset}
+      />}
 
       {photo.src && <FaceTracker state={trackerState} />}
 
@@ -127,7 +159,8 @@ export const FrozenPhotoView: React.FC<FrozenPhotoViewProps> = ({
       )}
 
       {photo.status === 'ready' && (
-        <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center z-10">
+        <div className="absolute bottom-28 left-0 right-0 flex items-center justify-center gap-2 z-10">
+          <button onClick={savePhoto} aria-label="บันทึกภาพลองแว่น" className="px-4 py-2 rounded-full bg-white text-[#071b4b] text-xs font-semibold flex items-center gap-1.5"><span aria-hidden="true" className="material-symbols-outlined text-[16px]">download</span>บันทึกภาพลองแว่น</button>
           <button
             onClick={onRetake}
             className="px-4 py-2 rounded-full bg-black/50 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all"
@@ -137,6 +170,7 @@ export const FrozenPhotoView: React.FC<FrozenPhotoViewProps> = ({
           </button>
         </div>
       )}
+      {saveError && <div role="status" className="absolute bottom-40 left-0 right-0 text-center text-xs text-white">{saveError}</div>}
     </div>
   );
 };

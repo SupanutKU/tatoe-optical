@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { getImageFaceLandmarker, isBrowserSupported } from '../lib/faceLandmarkerLoader';
-import { computeFaceMetrics, mirrorFaceMetrics, type FaceMetrics } from '../lib/faceGeometry';
+import { computeFaceMetrics, type FaceMetrics } from '../lib/faceGeometry';
 
 export type TryOnMode = 'camera' | 'upload';
 
@@ -45,146 +45,70 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+async function analyzeFrozenPhoto(src: string): Promise<FrozenPhoto> {
+  const image = await loadImageElement(src);
+  const base = {src,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,metrics:null};
+  const detector = await getImageFaceLandmarker();
+  const result = detector.detect(image);
+  const faces = result.faceLandmarks ?? [];
+  if (!faces.length) return {...base,status:'no-face',errorMessage:'ไม่พบใบหน้า กรุณาใช้ภาพที่เห็นใบหน้าชัดเจน'};
+  if (faces.length>1) return {...base,status:'multiple-faces',errorMessage:'พบมากกว่า 1 ใบหน้า กรุณาใช้ภาพที่มีใบหน้าเดียว'};
+  const metrics = computeFaceMetrics(faces[0],image.naturalWidth,image.naturalHeight,result.facialTransformationMatrixes?.[0]?.data);
+  return {...base,metrics,status:metrics?'ready':'error',errorMessage:metrics?undefined:'ไม่สามารถวิเคราะห์ใบหน้าได้ กรุณาลองใหม่'};
+}
+
 export function useVirtualTryOn(): UseVirtualTryOnResult {
-  const [mode, setModeState] = useState<TryOnMode>('camera');
-  const [frozenPhoto, setFrozenPhoto] = useState<FrozenPhoto | null>(null);
-  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+  const [mode,setModeState] = useState<TryOnMode>('camera');
+  const [frozenPhoto,setFrozenPhoto] = useState<FrozenPhoto|null>(null);
+  const [isProcessingUpload,setIsProcessingUpload] = useState(false);
+  const requestId = useRef(0);
+  const setMode = useCallback((next:TryOnMode)=>{
+    requestId.current++; setModeState(next); setFrozenPhoto(null); setIsProcessingUpload(false);
+  },[]);
+  const retake = useCallback(()=>{
+    requestId.current++; setFrozenPhoto(null); setIsProcessingUpload(false);
+  },[]);
 
-  const setMode = useCallback((next: TryOnMode) => {
-    setModeState(next);
-    setFrozenPhoto(null);
-  }, []);
-
-  const retake = useCallback(() => setFrozenPhoto(null), []);
-
-  const captureFromVideo = useCallback(
-    (video: HTMLVideoElement, liveMetrics: FaceMetrics | null, mirrored: boolean) => {
-      const width = video.videoWidth;
-      const height = video.videoHeight;
-      if (!width || !height) return;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      if (mirrored) {
-        ctx.translate(width, 0);
-        ctx.scale(-1, 1);
-      }
-      ctx.drawImage(video, 0, 0, width, height);
-
-      const src = canvas.toDataURL('image/jpeg', 0.92);
-      const metrics = liveMetrics ? (mirrored ? mirrorFaceMetrics(liveMetrics, width) : liveMetrics) : null;
-
-      setFrozenPhoto({
-        src,
-        naturalWidth: width,
-        naturalHeight: height,
-        status: metrics ? 'ready' : 'no-face',
-        metrics,
-      });
-    },
-    []
-  );
-
-  const handleUploadFile = useCallback(async (file: File) => {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setFrozenPhoto({
-        src: '',
-        naturalWidth: 0,
-        naturalHeight: 0,
-        status: 'error',
-        metrics: null,
-        errorMessage: 'รองรับเฉพาะไฟล์ JPG, JPEG, PNG หรือ WEBP เท่านั้น',
-      });
-      return;
+  const captureFromVideo = useCallback(async(video:HTMLVideoElement,_liveMetrics:FaceMetrics|null,mirrored:boolean)=>{
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const id = ++requestId.current;
+    const canvas = document.createElement('canvas');
+    canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    const ctx=canvas.getContext('2d');if(!ctx)return;
+    if(mirrored){ctx.translate(canvas.width,0);ctx.scale(-1,1)}
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const src=canvas.toDataURL('image/jpeg',.94);
+    setIsProcessingUpload(false);
+    setFrozenPhoto({src,naturalWidth:canvas.width,naturalHeight:canvas.height,status:'detecting',metrics:null});
+    try {
+      // Re-detect this exact mirrored snapshot. Live pose may belong to a
+      // preceding video frame, especially when the wearer moves while clicking.
+      const photo=await analyzeFrozenPhoto(src);
+      if(id===requestId.current)setFrozenPhoto(photo);
+    }catch{
+      if(id===requestId.current)setFrozenPhoto({src,naturalWidth:canvas.width,naturalHeight:canvas.height,status:'error',metrics:null,errorMessage:'วิเคราะห์ภาพที่ถ่ายไม่สำเร็จ กรุณาถ่ายใหม่'});
     }
+  },[]);
 
-    if (!isBrowserSupported()) {
-      setFrozenPhoto({
-        src: '',
-        naturalWidth: 0,
-        naturalHeight: 0,
-        status: 'error',
-        metrics: null,
-        errorMessage: 'เบราว์เซอร์นี้ไม่รองรับการตรวจจับใบหน้า',
-      });
-      return;
-    }
-
+  const handleUploadFile = useCallback(async(file:File)=>{
+    const id=++requestId.current;
+    setIsProcessingUpload(false);
+    const error=(message:string)=>setFrozenPhoto({src:'',naturalWidth:0,naturalHeight:0,status:'error',metrics:null,errorMessage:message});
+    if(!ACCEPTED_TYPES.includes(file.type)){error('รองรับเฉพาะไฟล์ JPG, JPEG, PNG หรือ WEBP เท่านั้น');return}
+    if(!isBrowserSupported()){error('เบราว์เซอร์นี้ไม่รองรับการตรวจจับใบหน้า');return}
     setIsProcessingUpload(true);
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      const imgEl = await loadImageElement(dataUrl);
-
-      setFrozenPhoto({
-        src: dataUrl,
-        naturalWidth: imgEl.naturalWidth,
-        naturalHeight: imgEl.naturalHeight,
-        status: 'detecting',
-        metrics: null,
-      });
-
-      const landmarker = await getImageFaceLandmarker();
-      const result = landmarker.detect(imgEl);
-      const faces = result.faceLandmarks ?? [];
-
-      if (faces.length === 0) {
-        setFrozenPhoto({
-          src: dataUrl,
-          naturalWidth: imgEl.naturalWidth,
-          naturalHeight: imgEl.naturalHeight,
-          status: 'no-face',
-          metrics: null,
-          errorMessage: 'ไม่พบใบหน้าในรูปภาพ กรุณาเลือกรูปที่เห็นใบหน้าชัดเจน',
-        });
-        return;
-      }
-
-      if (faces.length > 1) {
-        setFrozenPhoto({
-          src: dataUrl,
-          naturalWidth: imgEl.naturalWidth,
-          naturalHeight: imgEl.naturalHeight,
-          status: 'multiple-faces',
-          metrics: null,
-          errorMessage: 'พบมากกว่า 1 ใบหน้าในรูปภาพ กรุณาเลือกรูปที่มีใบหน้าเดียว',
-        });
-        return;
-      }
-
-      const metrics = computeFaceMetrics(faces[0], imgEl.naturalWidth, imgEl.naturalHeight);
-      setFrozenPhoto({
-        src: dataUrl,
-        naturalWidth: imgEl.naturalWidth,
-        naturalHeight: imgEl.naturalHeight,
-        status: metrics ? 'ready' : 'error',
-        metrics,
-        errorMessage: metrics ? undefined : 'ไม่สามารถวิเคราะห์ใบหน้าได้ กรุณาลองรูปอื่น',
-      });
-    } catch {
-      setFrozenPhoto({
-        src: '',
-        naturalWidth: 0,
-        naturalHeight: 0,
-        status: 'error',
-        metrics: null,
-        errorMessage: 'เกิดข้อผิดพลาดในการประมวลผลรูปภาพ กรุณาลองใหม่อีกครั้ง',
-      });
-    } finally {
-      setIsProcessingUpload(false);
+      const src=await readFileAsDataUrl(file);
+      const image=await loadImageElement(src);
+      if(id!==requestId.current)return;
+      setFrozenPhoto({src,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,status:'detecting',metrics:null});
+      const photo=await analyzeFrozenPhoto(src);
+      if(id===requestId.current)setFrozenPhoto(photo);
+    }catch{
+      if(id===requestId.current)error('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ กรุณาลองใหม่');
+    }finally{
+      if(id===requestId.current)setIsProcessingUpload(false);
     }
-  }, []);
-
-  return {
-    mode,
-    setMode,
-    frozenPhoto,
-    isProcessingUpload,
-    captureFromVideo,
-    handleUploadFile,
-    retake,
-  };
+  },[]);
+  return {mode,setMode,frozenPhoto,isProcessingUpload,captureFromVideo,handleUploadFile,retake};
 }

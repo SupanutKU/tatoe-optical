@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {VirtualTryOnModal} from '../src/components/VirtualTryOnModal';
+import {AdminProductModal} from '../src/components/AdminProductModal';
+const admin = renderToStaticMarkup(<AdminProductModal isOpen onClose={()=>{}} onSave={()=>{}} />);
+assert.ok(admin.includes('อัปโหลดโมเดลแว่น GLB'));
+for (const label of ['ใช้กรอบดำทรงเหลี่ยม','ใช้กรอบกลมไทเทเนียม','ใช้Aviator สีทอง']) assert.ok(admin.includes(label));
+const preview = renderToStaticMarkup(<VirtualTryOnModal isOpen onClose={()=>{}} products={[]} />);
+assert.ok(!preview.includes('เลือก GLB')); assert.ok(!preview.includes('ไฟล์ 3D ที่เลือก'));
+console.log('Passed: GLB upload exists in admin and is absent from customer try-on.');
