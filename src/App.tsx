@@ -15,6 +15,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { RegisterScreen } from './components/RegisterScreen';
 import { ForgotPasswordScreen } from './components/ForgotPasswordScreen';
 import { loadSession, clearSession, StoredSession } from './constants/api';
+import { subscribeCatalogChanges } from './lib/catalogSync';
 import { fetchProducts, createProduct, updateProduct, deleteProduct } from './lib/productApi';
 import { VirtualTryOnModal } from './components/VirtualTryOnModal';
 import { PrescriptionModal } from './components/PrescriptionModal';
@@ -144,6 +145,7 @@ export default function App() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogUpdatedAt, setCatalogUpdatedAt] = useState<Date | null>(null);
   const catalogRequestRef = React.useRef(0);
+  const [isVirtualTryOnOpen, setIsVirtualTryOnOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -167,19 +169,14 @@ export default function App() {
         if (!cancelled && version === catalogRequestRef.current) setCatalogLoading(false);
       }
     };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void refreshProducts();
-    };
     void refreshProducts();
-    window.addEventListener('focus', refreshWhenVisible);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const unsubscribe = subscribeCatalogChanges(() => { void refreshProducts(); });
     return () => {
       cancelled = true;
       ++catalogRequestRef.current;
-      window.removeEventListener('focus', refreshWhenVisible);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      unsubscribe();
     };
-  }, [isAuthenticated, authToken]);
+  }, [isAuthenticated, authToken, currentScreen, isVirtualTryOnOpen]);
 
   useEffect(() => {
     if (isAuthenticated && currentScreen === 'admin-dashboard' && user.role !== 'admin') {
@@ -224,7 +221,6 @@ export default function App() {
   };
 
   // Modals & Chat
-  const [isVirtualTryOnOpen, setIsVirtualTryOnOpen] = useState(false);
   const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -647,6 +643,7 @@ export default function App() {
   const handleSaveProduct = async (data: Partial<Product> & { id?: string }) => {
     if (!isAuthenticated || user.role !== 'admin') return false;
     try {
+      ++catalogRequestRef.current; // discard reads started before the admin write
       if (data.id) {
         // Update SQL first. The UI is updated only after the database confirms the write.
         const saved = await updateProduct(data.id, data);
@@ -663,10 +660,12 @@ export default function App() {
         setSelectedProduct((prev) => prev || saved);
         showToast(`เพิ่มสินค้า "${saved.name}" ลง SQL สำเร็จแล้ว`);
       }
+      setCatalogError(null); setCatalogLoading(false); setCatalogUpdatedAt(new Date());
       setIsAdminProductModalOpen(false);
       setEditingProduct(null);
       return true;
     } catch (error) {
+      setCatalogLoading(false);
       console.error('บันทึกสินค้าไม่สำเร็จ:', error);
       showToast(error instanceof Error ? error.message : 'บันทึกสินค้าใน SQL ไม่สำเร็จ');
       return false;

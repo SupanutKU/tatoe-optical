@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { prepareModelFit, computeModelFit } from '../src/lib/modelAutoFit';
-const bytes = fs.readFileSync('public/models/aviator_lavender.glb');
+const bytes = fs.readFileSync('public/models/round-black-glasses.glb');
 const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset+bytes.byteLength), '');
 const fit = prepareModelFit(gltf.scene);
 assert.equal(fit.source, 'lenses'); assert.ok(fit.lensSpan > .35 && fit.lensSpan < .7);

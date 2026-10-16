@@ -6,7 +6,6 @@ export interface ModelFit {
   lensSpan: number;
   bridge: THREE.Vector3 | null;
   source: 'lenses' | 'front-geometry';
-  lensCenters?: [THREE.Vector3, THREE.Vector3];
 }
 
 /** GLB convention: X across the lenses, Y up, +Z toward the camera.
@@ -57,7 +56,7 @@ export function prepareModelFit(model: THREE.Group): ModelFit {
   // Wrappers avoid destroying GLB root scale, translation or rotation.
   const translation = new THREE.Group(); translation.position.copy(opticalCentre).negate(); translation.add(model);
   const root = new THREE.Group(); root.scale.setScalar(1/size.x); root.add(translation);
-  return { root, lensSpan: span, lensCenters: [a.clone().sub(opticalCentre).divideScalar(size.x), b.clone().sub(opticalCentre).divideScalar(size.x)], bridge: bridges.length ? bridges[0].clone().sub(opticalCentre).divideScalar(size.x) : null, source };
+  return { root, lensSpan: span, bridge: bridges.length ? bridges[0].clone().sub(opticalCentre).divideScalar(size.x) : null, source };
 }
 
 /** Optical alignment with a modest nose-bridge constraint; uniform scale preserves shape. */
@@ -67,7 +66,7 @@ export function computeModelFit(m: FaceMetrics, fit: ModelFit) {
   let width = pd/fit.lensSpan;
   const yaw = THREE.MathUtils.clamp(m.yawRad ?? m.yawRatio*.78, -1.2, 1.2);
   const pitch = THREE.MathUtils.clamp(m.pitchRad ?? m.pitchRatio*.56, -.8, .8);
-  const quaternion = m.headQuaternion ? new THREE.Quaternion().fromArray(m.headQuaternion).normalize() : new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, -m.rollDeg*Math.PI/180, 'ZYX'));
+  const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, -m.rollDeg*Math.PI/180, 'ZYX'));
   // Fit projected lens-centre separation to the actual pupils. This avoids
   // mixing a cheek-derived yaw with an iris-derived scale at oblique angles.
   const opticalAxis = new THREE.Vector3(1,0,0).applyQuaternion(quaternion);
@@ -76,7 +75,7 @@ export function computeModelFit(m: FaceMetrics, fit: ModelFit) {
   width = THREE.MathUtils.clamp(width, faceWidth*.65, faceWidth*1.3);
   const eyeDepth = m.leftEye && m.rightEye ? (m.leftEye.z+m.rightEye.z)/2 : 0;
   const seatDepth = m.bridgeDepth !== undefined ? -(m.bridgeDepth-eyeDepth) : 0;
-  const eye = new THREE.Vector3(m.eyeCenter.x, -m.eyeCenter.y, seatDepth+width*.07);
+  const eye = new THREE.Vector3(m.eyeCenter.x, -m.eyeCenter.y, seatDepth+width*.02);
   if (fit.bridge) {
     const projectedBridge = fit.bridge.clone().multiplyScalar(width).applyQuaternion(quaternion).add(eye);
     const target = m.bridge || m.noseBridge;

@@ -1,4 +1,3 @@
-import { ProductModelPreview } from './ProductModelPreview';
 import React, { useState } from 'react';
 import { Product, ProductReview, UserProfile, ScreenId } from '../types';
 import { ProductReviewsSection } from './ProductReviewsSection';
@@ -38,9 +37,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const [selectedColor, setSelectedColor] = useState('ดำด้าน Matte Black');
   const [showToast, setShowToast] = useState(false);
 
-  const images = product.images || [];
-  const slides: (string | null)[] = product.model3d ? [null, ...images] : images.length ? images : [null];
-  const slide = Math.min(currentSlide, slides.length - 1);
+  const images = product.images.length > 0 ? product.images : [product.images[0]];
 
   const colorOptions = [
     { name: 'ดำด้าน Matte Black', label: 'ดำด้าน', hex: '#1e232a', slide: 0 },
@@ -51,7 +48,7 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
   const handleSelectColor = (colorName: string, slideIdx: number) => {
     setSelectedColor(colorName);
     if (images[slideIdx]) {
-      setCurrentSlide(slideIdx + (product.model3d ? 1 : 0));
+      setCurrentSlide(slideIdx);
     }
   };
 
@@ -73,16 +70,18 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
       <div className="relative w-full overflow-hidden rounded-2xl bg-surface-container-low shadow-sm">
         <div
           className="flex transition-transform duration-300 ease-out w-full"
-          style={{ transform: `translateX(-${slide * 100}%)` }}
+          style={{ transform: `translateX(-${currentSlide * 100}%)` }}
         >
-          {slides.map((imgUrl, idx) => (
+          {images.map((imgUrl, idx) => (
             <div
               key={idx}
               className="min-w-full relative aspect-[4/3] flex items-center justify-center bg-surface-container-lowest"
             >
-              {imgUrl ? <img src={imgUrl} alt={`${product.name} - slide ${idx + 1}`} className="w-full h-full object-cover" />
-                : product.model3d ? <ProductModelPreview modelUrl={product.model3d} name={product.name} />
-                : <span className="text-xs text-on-surface-variant">ยังไม่มีรูปสินค้า</span>}
+              <img
+                src={imgUrl}
+                alt={`${product.name} - slide ${idx + 1}`}
+                className="w-full h-full object-cover"
+              />
             </div>
           ))}
         </div>
@@ -124,17 +123,17 @@ export const ProductDetailScreen: React.FC<ProductDetailScreenProps> = ({
         {/* Carousel Indicator Overlay Bottom */}
         <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-inverse-surface/75 text-inverse-on-surface backdrop-blur-md text-[11px] font-semibold">
           <span className="material-symbols-outlined text-[13px]">photo_camera</span>
-          <span>{product.model3d && slide === 0 ? '3D • ' : ''}{slide + 1}/{slides.length}</span>
+          <span>{currentSlide + 1}/{images.length}</span>
         </div>
 
         {/* Micro Navigation Dots */}
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5">
-          {slides.map((_, idx) => (
+          {images.map((_, idx) => (
             <button
               key={idx}
               onClick={() => setCurrentSlide(idx)}
               className={`rounded-full transition-all duration-200 ${
-                slide === idx ? 'w-2.5 h-2 bg-primary' : 'w-1.5 h-1.5 bg-outline-variant'
+                currentSlide === idx ? 'w-2.5 h-2 bg-primary' : 'w-1.5 h-1.5 bg-outline-variant'
               }`}
               aria-label={`Slide ${idx + 1}`}
             />

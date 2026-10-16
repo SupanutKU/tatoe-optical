@@ -1,5 +1,4 @@
 import { poseFromAxes } from './headPose';
-import * as THREE from 'three';
 // MediaPipe Face Landmarker geometry helpers.
 // The renderer intentionally works from the 3D landmark cloud rather than
 // requiring a GLTF/OBJ asset. All measurements remain in source-video pixels.
@@ -74,8 +73,6 @@ export interface FaceMetrics {
   yawRad?: number;
   pitchRad?: number;
   poseSource?: 'matrix' | 'landmarks';
-  /** Canonical-face rotation in the same right-handed camera space as Three.js. */
-  headQuaternion?: [number, number, number, number];
 }
 
 function p3(landmarks: { x: number; y: number; z?: number }[], index: number, width: number, height: number): Point3D {
@@ -87,8 +84,40 @@ function distance3(a: Point3D, b: Point3D) { return Math.hypot(b.x - a.x, b.y - 
 
 type V3 = { x: number; y: number; z: number };
 const vsub = (a: V3, b: V3): V3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const vdot = (a: V3, b: V3) => a.x * b.x + a.y * b.y + a.z * b.z;
 const vnorm = (a: V3): V3 => { const l = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / l, y: a.y / l, z: a.z / l }; };
 const median3 = (a: number, b: number, c: number) => a + b + c - Math.min(a, b, c) - Math.max(a, b, c);
+
+/**
+ * Coordinate convention of the facial-transformation matrix differs between builds
+ * (y up vs down, z toward vs away from the camera). Rather than guess, test the four
+ * (flipY, flipZ) combinations against the landmark-derived head axes and remember the
+ * winner (only updated while the head is clearly turned, so it cannot flicker near 0).
+ */
+let matrixCombo: [number, number] = [-1, -1];
+
+function poseFromMatrix(m: ArrayLike<number> | undefined, uLM: V3, dLM: V3): { yaw: number; pitch: number } | null {
+  if (!m || m.length < 16) return null;
+  const col = (j: number): V3 => vnorm({ x: m[4 * j], y: m[4 * j + 1], z: m[4 * j + 2] });
+  const c0 = col(0), c1 = col(1);
+  if (![c0.x, c0.y, c0.z, c1.x, c1.y, c1.z].every(Number.isFinite)) return null;
+  const apply = (v: V3, c: [number, number]): V3 => ({ x: v.x, y: c[0] * v.y, z: c[1] * v.z });
+
+  if (Math.abs(uLM.z) > 0.25) {
+    let best = -1;
+    for (const sy of [1, -1]) for (const sz of [1, -1]) {
+      const c: [number, number] = [sy, sz];
+      const score = Math.abs(vdot(apply(c0, c), uLM)) + Math.abs(vdot(apply(c1, c), dLM));
+      if (score > best) { best = score; matrixCombo = c; }
+    }
+  }
+  const a = apply(c0, matrixCombo), b = apply(c1, matrixCombo);
+  const da = vdot(a, uLM), db = vdot(b, dLM);
+  if (Math.abs(da) < 0.7 || Math.abs(db) < 0.7) return null; // matrix does not agree with the landmarks
+  const r = da < 0 ? { x: -a.x, y: -a.y, z: -a.z } : a;      // head "right" axis (image-right)
+  const d = db < 0 ? { x: -b.x, y: -b.y, z: -b.z } : b;      // head "down" axis
+  return poseFromAxes(r, d);
+}
 
 const mix2 = (a: Point2D, b: Point2D, t: number): Point2D => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -193,23 +222,17 @@ export function computeFaceMetrics(
 
   // ---- Head pose (no 3D model): axes of the 3D landmark cloud, refined by the
   // fitted transformation matrix when MediaPipe provides it. ----
+  const uLM = vnorm(vsub(rightCheek, leftCheek));   // head "right" axis, image space
   const dLM = vnorm(vsub(chin, forehead));          // head "down" axis
   const axesPose = poseFromAxes(vnorm(opticalRight), dLM);
   let yawRad = clamp(axesPose.yaw, -0.9, 0.9);
   let pitchRad = clamp(axesPose.pitch, -0.7, 0.7);
   let poseSource: 'matrix' | 'landmarks' = 'landmarks';
-  let headQuaternion: FaceMetrics['headQuaternion'];
-  if (transformMatrix?.length === 16 && Array.from(transformMatrix).every(Number.isFinite)) {
-    const matrix = new THREE.Matrix4().fromArray(Array.from(transformMatrix));
-    const rotation = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    matrix.decompose(new THREE.Vector3(), rotation, scale);
-    if (scale.x > .5 && scale.x < 2 && scale.y > .5 && scale.y < 2 && scale.z > .5 && scale.z < 2) {
-      rotation.normalize();
-      const euler = new THREE.Euler().setFromQuaternion(rotation, 'ZYX');
-      headQuaternion = rotation.toArray();
-      yawRad = euler.y; pitchRad = euler.x; poseSource = 'matrix';
-    }
+  const mp = poseFromMatrix(transformMatrix, uLM, dLM);
+  if (mp && Math.abs(mp.yaw - yawRad) < 0.15 && Math.abs(mp.pitch - pitchRad) < 0.15) {
+    // Keep yaw tied to the actual optical axis; only refine compatible pitch.
+    pitchRad = clamp(mp.pitch, -0.7, 0.7);
+    poseSource = 'matrix';
   }
 
   return {
@@ -242,14 +265,12 @@ export function computeFaceMetrics(
     yawRad,
     pitchRad,
     poseSource,
-    headQuaternion,
   };
 }
 
 export function mirrorFaceMetrics(metrics: FaceMetrics, frameWidth: number): FaceMetrics {
   return {
     ...metrics,
-    faceSurface: metrics.faceSurface?.map(point => ({ ...point, x: frameWidth-point.x })),
     eyeCenter: { x: frameWidth - metrics.eyeCenter.x, y: metrics.eyeCenter.y },
     noseBridge: { x: frameWidth - metrics.noseBridge.x, y: metrics.noseBridge.y },
     bridge: metrics.bridge ? { x: frameWidth - metrics.bridge.x, y: metrics.bridge.y } : undefined,
@@ -263,6 +284,5 @@ export function mirrorFaceMetrics(metrics: FaceMetrics, frameWidth: number): Fac
     rollDeg: -metrics.rollDeg,
     yawRatio: -metrics.yawRatio,
     yawRad: metrics.yawRad !== undefined ? -metrics.yawRad : undefined,
-    headQuaternion: metrics.headQuaternion ? [metrics.headQuaternion[0], -metrics.headQuaternion[1], -metrics.headQuaternion[2], metrics.headQuaternion[3]] : undefined,
   };
 }

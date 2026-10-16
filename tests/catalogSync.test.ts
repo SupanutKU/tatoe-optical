@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {subscribeCatalogChanges,notifyCatalogChanged,CATALOG_CHANGE_KEY} from '../src/lib/catalogSync';
+const browser=new EventTarget();const doc=Object.assign(new EventTarget(),{visibilityState:'visible'});
+Object.assign(globalThis,{window:browser,document:doc,localStorage:{setItem:(key:string,value:string)=>{assert.equal(key,CATALOG_CHANGE_KEY);assert.ok(value);}}});
+const oldInterval=globalThis.setInterval,oldClear=globalThis.clearInterval;
+let poll:(()=>void)|undefined;
+(globalThis as any).setInterval=(callback:()=>void,ms:number)=>{assert.equal(ms,30000);poll=callback;return 1;};
+(globalThis as any).clearInterval=()=>{poll=undefined;};
+let refreshes=0;const stop=subscribeCatalogChanges(()=>refreshes++);
+const settle=()=>new Promise(resolve=>setTimeout(resolve,130));
+notifyCatalogChanged();await settle();assert.equal(refreshes,1);
+const event=Object.assign(new Event('storage'),{key:CATALOG_CHANGE_KEY});browser.dispatchEvent(event);await settle();assert.equal(refreshes,2);
+poll?.();await settle();assert.equal(refreshes,3);
+doc.visibilityState='hidden';poll?.();await settle();assert.equal(refreshes,3);
+doc.visibilityState='visible';doc.dispatchEvent(new Event('visibilitychange'));await settle();assert.equal(refreshes,4);
+stop();notifyCatalogChanged();await settle();assert.equal(refreshes,4);assert.equal(poll,undefined);
+globalThis.setInterval=oldInterval;globalThis.clearInterval=oldClear;
+console.log('Passed: local save, another tab, 30s poll, hidden-tab pause, foreground refresh and cleanup.');

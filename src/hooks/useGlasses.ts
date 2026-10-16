@@ -25,10 +25,10 @@ export function overlayImageForProduct(product: Product | null | undefined): str
 }
 
 export function useGlasses({ products, initialProduct }: UseGlassesOptions): UseGlassesResult {
-  const [selectedId, setSelectedId] = useState<string | null>(initialProduct?.id || null);
-  const selected = products.find(product => product.id === selectedId)
-    || products.find(product => product.id === initialProduct?.id)
-    || products[0] || null;
+  const [selectedId, setSelectedId] = useState<string | null>(initialProduct?.id || products[0]?.id || null);
+  // Resolve against the current catalog, so uploaded models/edits are reflected
+  // without keeping a stale Product object in the open try-on modal.
+  const selected = products.find(p => p.id === selectedId) || products[0] || null;
   const [faceShapeResult, setFaceShapeResult] = useState<FaceShapeResult | null>(null);
 
   const recommendations = useMemo(() => {
@@ -39,7 +39,7 @@ export function useGlasses({ products, initialProduct }: UseGlassesOptions): Use
   return {
     glasses: products,
     selected,
-    selectProduct: product => setSelectedId(product.id),
+    selectProduct: (product: Product) => setSelectedId(product.id),
     overlaySrc: overlayImageForProduct,
     faceShapeResult,
     recommendations,

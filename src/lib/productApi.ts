@@ -1,3 +1,4 @@
+import { notifyCatalogChanged } from './catalogSync';
 import type { Product } from '../types';
 import { buildAuthHeaders, getApiBaseUrl, loadSession } from '../constants/api';
 
@@ -26,6 +27,7 @@ export async function createProduct(data: Partial<Product>): Promise<Product> {
     body: JSON.stringify(data),
   });
   const payload = await parseResponse<{ success: boolean; product: Product }>(response);
+  notifyCatalogChanged();
   return payload.product;
 }
 
@@ -37,6 +39,7 @@ export async function updateProduct(id: string, data: Partial<Product>): Promise
     body: JSON.stringify(data),
   });
   const payload = await parseResponse<{ success: boolean; product: Product }>(response);
+  notifyCatalogChanged();
   return payload.product;
 }
 
@@ -47,6 +50,7 @@ export async function deleteProduct(id: string): Promise<void> {
     headers: buildAuthHeaders(session?.token),
   });
   await parseResponse<{ success: boolean }>(response);
+  notifyCatalogChanged();
 }
 
 /** Downloads an image and returns it as base64 (used to send product photos to the AI). */

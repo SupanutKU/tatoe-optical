@@ -792,7 +792,6 @@ export function mapMetricsToDisplay(
     rollDeg: mirrored ? -metrics.rollDeg : metrics.rollDeg,
     yawRatio: mirrored ? -metrics.yawRatio : metrics.yawRatio,
     yawRad: metrics.yawRad !== undefined ? (mirrored ? -metrics.yawRad : metrics.yawRad) : undefined,
-    headQuaternion: metrics.headQuaternion && mirrored ? [metrics.headQuaternion[0], -metrics.headQuaternion[1], -metrics.headQuaternion[2], metrics.headQuaternion[3]] : metrics.headQuaternion,
     outerEyeDistPx3D: metrics.outerEyeDistPx3D !== undefined ? scaleMetric(metrics.outerEyeDistPx3D) : undefined,
   };
 }

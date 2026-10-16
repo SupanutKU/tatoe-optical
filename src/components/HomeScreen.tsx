@@ -1,4 +1,3 @@
-import { ProductVisual } from './ProductVisual';
 import React, { useState } from 'react';
 import { Product, UserProfile, ScreenId } from '../types';
 import { APP_LOGO } from '../data/mockData';
@@ -44,7 +43,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onDeleteProduct,
   onResetProducts
 }) => {
-  const [activeCategory, setActiveCategory] = useState<'prescription' | 'sunglasses' | 'blue-light' | 'sports'>('prescription');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'prescription' | 'sunglasses' | 'blue-light' | 'sports'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const isAdmin = user.role === 'admin';
@@ -56,7 +55,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Filter products by selected category for flexible browsing
   const categoryFiltered = products.filter(
-    (p) => activeCategory === 'prescription' || p.category === activeCategory
+    (p) => activeCategory === 'all' || p.category === activeCategory
   );
 
   const featuredList = categoryFiltered.slice(0, 2);
@@ -267,6 +266,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <span className="text-label-sm text-primary font-semibold">4 หมวดหมู่</span>
         </div>
         <div className="flex gap-space-sm overflow-x-auto no-scrollbar py-1 -mx-margin px-margin">
+          <button onClick={() => setActiveCategory('all')} className={`px-3.5 py-2.5 rounded-full shrink-0 text-xs font-semibold ${activeCategory === 'all' ? 'bg-secondary-fixed text-on-secondary-fixed ring-1 ring-primary/40' : 'bg-surface-container-lowest text-on-surface-variant'}`}>สินค้าทั้งหมด ({products.length})</button>
           {/* Active Pill: แว่นสายตา */}
           <button
             onClick={() => setActiveCategory('prescription')}
@@ -490,7 +490,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </button>
                   )}
 
-                  <ProductVisual product={item}
+                  <img
+                    src={item.images[0]}
+                    alt={item.name}
                     className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
@@ -503,6 +505,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <span>({item.reviewCount})</span>
                 </div>
 
+                {onOpenVirtualTryOnWithProduct && <button type="button" onClick={e => { e.stopPropagation(); onOpenVirtualTryOnWithProduct(item); }} className="mb-2 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold">{item.model3d ? 'ลองแว่น 3D' : 'ลองแว่น'}</button>}
                 <h4 className="font-bold text-sm text-on-surface truncate group-hover:text-primary transition-colors">
                   {item.name}
                 </h4>
@@ -569,13 +572,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     {item.tag}
                   </span>
                 ) : null}
-                <ProductVisual product={item}
+                <img
+                  src={item.images[0]}
+                  alt={item.name}
                   className="w-full h-full object-contain mix-blend-multiply"
                 />
               </div>
 
               <div className="flex-1 min-w-0 flex flex-col">
                 <div className="flex items-center justify-between mb-0.5">
+                  {onOpenVirtualTryOnWithProduct && <button type="button" onClick={e => { e.stopPropagation(); onOpenVirtualTryOnWithProduct(item); }} className="mb-1 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold">{item.model3d ? 'ลองแว่น 3D' : 'ลองแว่น'}</button>}
                   <h4 className="font-bold text-sm text-on-surface truncate">
                     {item.name}
                   </h4>

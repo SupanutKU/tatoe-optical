@@ -78,7 +78,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
       />
 
       {camera.isActive && videoSize.width > 0 && (
-        !product ? null : product.model3d ? <ThreeGlassesOverlay
+        product?.model3d ? <ThreeGlassesOverlay
           modelUrl={product.model3d} metrics={tracking.metrics} metricsRef={tracking.metricsRef}
           videoSize={videoSize} mirrored={mirrored}
           fitMultiplier={product.tryOnFitMultiplier} verticalOffset={product.tryOnVerticalOffset}
@@ -98,13 +98,6 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
         </div>
       )}
 
-      {camera.isActive && (tracking.status === 'error' || tracking.status === 'unsupported') && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/50 px-6 text-center text-white">
-          <p className="text-sm">{tracking.errorMessage || 'เริ่มระบบลองแว่นไม่สำเร็จ'}</p>
-          <button onClick={() => { camera.stop(); requestAnimationFrame(() => { void camera.start(); }); }} className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#071b4b]">ลองใหม่</button>
-        </div>
-      )}
-
       {camera.isActive && (
         <FaceTracker
           state={trackerState}
@@ -121,7 +114,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ active, product, onCaptu
             </button>
           )}
           <button
-            onClick={() => onCapture(camera.videoRef.current as HTMLVideoElement, tracking.metricsRef.current, mirrored)}
+            onClick={() => onCapture(camera.videoRef.current as HTMLVideoElement, tracking.metrics, mirrored)}
             disabled={tracking.status !== 'tracking'}
             aria-label="ถ่ายภาพ"
             className="w-[68px] h-[68px] rounded-full bg-white flex items-center justify-center shadow-xl active:scale-90 transition-all disabled:opacity-40 border-[5px] border-white/40"

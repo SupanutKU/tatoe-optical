@@ -4,9 +4,12 @@ import {
   type FaceLandmarkerResult,
 } from '@mediapipe/tasks-vision';
 
-// Matching runtime and model are served by the app, including on mobile.
-const WASM_BASE_URL = '/mediapipe/wasm';
-const MODEL_ASSET_URL = '/mediapipe/face_landmarker.task';
+// Google's public MediaPipe CDN + model store. Downloaded once by the
+// browser and cached — no assets need to be bundled with the app.
+const WASM_BASE_URL =
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17/wasm';
+const MODEL_ASSET_URL =
+  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
 export type RunningMode = 'VIDEO' | 'IMAGE';
 
@@ -15,21 +18,16 @@ let imageLandmarkerPromise: Promise<FaceLandmarker> | null = null;
 
 async function createLandmarker(runningMode: RunningMode): Promise<FaceLandmarker> {
   const vision = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
-  const options = {
+  return FaceLandmarker.createFromOptions(vision, {
     baseOptions: {
       modelAssetPath: MODEL_ASSET_URL,
-      delegate: 'GPU' as const,
+      delegate: 'GPU',
     },
     runningMode,
-    numFaces: runningMode === 'VIDEO' ? 1 : 2,
-    minFaceDetectionConfidence: .5,
-    minFacePresenceConfidence: .5,
-    minTrackingConfidence: .5,
+    numFaces: 2, // allow detecting a 2nd face just so we can warn the user
     outputFaceBlendshapes: false,
     outputFacialTransformationMatrixes: true,
-  };
-  try { return await FaceLandmarker.createFromOptions(vision, options); }
-  catch { return FaceLandmarker.createFromOptions(vision, { ...options, baseOptions: { ...options.baseOptions, delegate: 'CPU' } }); }
+  });
 }
 
 /** Lazily creates (once) and returns the VIDEO-mode landmarker used for the live camera feed. */

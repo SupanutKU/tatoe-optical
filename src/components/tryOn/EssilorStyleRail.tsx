@@ -1,4 +1,3 @@
-import { ProductVisual } from '../ProductVisual';
 import React from 'react';
 import { Product } from '../../types';
 
@@ -17,7 +16,7 @@ export const EssilorStyleRail: React.FC<Props> = ({ products, selectedId, onSele
         <div className="flex justify-center">
           <button onClick={onToggle} className="rounded-full bg-black/60 border border-white/20 px-4 py-2 text-xs">⌃ เพิ่มเติม</button>
         </div>
-        <div className="mt-3 text-center text-xs text-white/70">กรอบที่พร้อมลองเสมือนจริงจะแสดงที่นี่</div>
+        <div className="mt-3 text-center text-xs text-white/70">ระบบพร้อมใช้งาน • เพิ่มข้อมูลกรอบจาก SQL เพื่อแสดงตัวเลือก</div>
       </div>
     );
   }
@@ -31,9 +30,9 @@ export const EssilorStyleRail: React.FC<Props> = ({ products, selectedId, onSele
           <div className="font-bold text-lg leading-tight truncate">{products.find(p => p.id === selectedId)?.name || 'เลือกกรอบแว่น'}</div>
         </div>
         <div className="ml-auto flex gap-2 overflow-x-auto no-scrollbar max-w-[72%]">
-          {products.slice(0, 12).map(product => (
-            <button key={product.id} onClick={() => onSelect(product)} className={`shrink-0 w-14 h-14 rounded-full border-2 overflow-hidden bg-white/90 ${product.id === selectedId ? 'border-white scale-105' : 'border-white/20 opacity-80'}`} title={product.name}>
-              <ProductVisual product={product} className="w-full h-full object-contain" />
+          {products.map(product => (
+            <button key={product.id} onClick={() => onSelect(product)} className={`shrink-0 w-14 h-14 rounded-full border-2 overflow-hidden bg-white/90 ${product.id === selectedId ? 'border-white scale-105' : 'border-white/20 opacity-80'}`} title={product.name} aria-label={`ลองแว่น ${product.name}${product.model3d ? ' 3D' : ''}`}>
+              <img src={product.images?.[0]} alt="" className="w-full h-full object-contain" />
             </button>
           ))}
         </div>
@@ -43,8 +42,9 @@ export const EssilorStyleRail: React.FC<Props> = ({ products, selectedId, onSele
           <div className="flex gap-3 overflow-x-auto no-scrollbar">
             {products.map(product => (
               <button key={product.id} onClick={() => onSelect(product)} className={`shrink-0 w-28 rounded-xl p-2 bg-white ${product.id === selectedId ? 'ring-2 ring-white' : ''}`}>
-                <div className="h-14 rounded-lg bg-[#f2f3f5] flex items-center justify-center overflow-hidden"><ProductVisual product={product} className="w-full h-full object-contain" /></div>
+                <div className="h-14 rounded-lg bg-[#f2f3f5] flex items-center justify-center overflow-hidden"><img src={product.images?.[0]} alt={product.name} className="w-full h-full object-contain" /></div>
                 <div className="mt-1 text-[10px] font-semibold text-black truncate">{product.name}</div>
+                {product.model3d && <span className="text-[10px] text-blue-700">ลองแว่น 3D</span>}
               </button>
             ))}
           </div>

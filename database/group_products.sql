@@ -1,0 +1,40 @@
+-- TATOE Optical: SQL source of truth for the product catalog.
+-- The API also creates this table automatically when it does not exist.
+-- Run this file once if you prefer to provision the table manually.
+
+CREATE TABLE IF NOT EXISTS `group_products` (
+  `product_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) NOT NULL,
+  `subtitle` VARCHAR(255) NULL,
+  `color_name` VARCHAR(255) NOT NULL DEFAULT 'สีมาตรฐาน',
+  `category` VARCHAR(50) NOT NULL DEFAULT 'prescription',
+  `shape` VARCHAR(50) NOT NULL DEFAULT 'round',
+  `material` VARCHAR(50) NOT NULL DEFAULT 'titanium',
+  `price` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `original_price` DECIMAL(12,2) NULL,
+  `discount_percentage` DECIMAL(5,2) NULL,
+  `rating` DECIMAL(3,2) NOT NULL DEFAULT 0,
+  `review_count` INT NOT NULL DEFAULT 0,
+  `sales_count` VARCHAR(100) NOT NULL DEFAULT '0',
+  `tag` VARCHAR(100) NULL,
+  `badge` VARCHAR(50) NULL,
+  `stock_status` VARCHAR(30) NOT NULL DEFAULT 'in_stock',
+  `stock_count` INT NOT NULL DEFAULT 0,
+  `images` JSON NULL,
+  `overlay_image` LONGTEXT NULL,
+  `model_3d` LONGTEXT NULL,
+  `try_on_scale` DECIMAL(8,4) NULL,
+  `try_on_offset_x` DECIMAL(8,4) NULL,
+  `try_on_offset_y` DECIMAL(8,4) NULL,
+  `try_on_offset_z` DECIMAL(8,4) NULL,
+  `lens_type` VARCHAR(255) NOT NULL DEFAULT '',
+  `weight` VARCHAR(100) NOT NULL DEFAULT '',
+  `warranty` VARCHAR(255) NOT NULL DEFAULT '',
+  `size` VARCHAR(100) NOT NULL DEFAULT '',
+  `description` TEXT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`product_id`),
+  KEY `idx_group_products_category` (`category`),
+  KEY `idx_group_products_stock_status` (`stock_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
